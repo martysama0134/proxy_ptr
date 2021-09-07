@@ -31,4 +31,8 @@
 *.out
 *.app
 
-linked_ptr_test/
+x64/
+Release/
+Debug/
+x86/
+.vs/
