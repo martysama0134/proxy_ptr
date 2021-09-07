@@ -3,7 +3,7 @@
 #include <assert.h>
 #include <unordered_set>
 
-namespace recursive {
+namespace linked {
     template <class _Ty> struct linked_default_delete {
         constexpr linked_default_delete() noexcept = default;
 
@@ -293,7 +293,7 @@ namespace recursive {
 
     template <class _Ty, class... TyArgs,
               std::enable_if_t<!std::is_array<_Ty>::value, int> = 0>
-    _NODISCARD linked_ptr<_Ty> make_recursive(TyArgs&&... VArgs) {
+    _NODISCARD linked_ptr<_Ty> make_linked(TyArgs&&... VArgs) {
         return std::move(
             linked_ptr<_Ty>(new _Ty(std::forward<TyArgs>(VArgs)...)));
     }
@@ -301,125 +301,125 @@ namespace recursive {
     template <class _Ty,
               std::enable_if_t<std::is_array_v<_Ty> && std::extent_v<_Ty> == 0,
                                int> = 0>
-    _NODISCARD linked_ptr<_Ty> make_recursive(const std::size_t size) {
+    _NODISCARD linked_ptr<_Ty> make_linked(const std::size_t size) {
         using _Elem = std::remove_extent_t<_Ty>;
         return std::move(linked_ptr<_Ty>(new _Elem[size]));
     }
 
     template <class _Ty, class = std::enable_if_t<std::extent_v<_Ty> != 0, int>>
-    _NODISCARD linked_ptr<_Ty> make_recursive(const std::size_t) = delete;
+    _NODISCARD linked_ptr<_Ty> make_linked(const std::size_t) = delete;
 
-}  // namespace recursive
+}  // namespace linked
 
 template <class _Ty1, class _Ty2>
-_NODISCARD bool operator==(const recursive::linked_ptr<_Ty1>& _Left,
-                           const recursive::linked_ptr<_Ty2>& _Right) {
+_NODISCARD bool operator==(const linked::linked_ptr<_Ty1>& _Left,
+                           const linked::linked_ptr<_Ty2>& _Right) {
     return _Left.get() == _Right.get();
 }
 
 template <class _Ty1, class _Ty2>
-_NODISCARD bool operator!=(const recursive::linked_ptr<_Ty1>& _Left,
-                           const recursive::linked_ptr<_Ty2>& _Right) {
+_NODISCARD bool operator!=(const linked::linked_ptr<_Ty1>& _Left,
+                           const linked::linked_ptr<_Ty2>& _Right) {
     return !(_Left == _Right);
 }
 
 template <class _Ty1, class _Ty2>
-_NODISCARD bool operator<(const recursive::linked_ptr<_Ty1>& _Left,
-                          const recursive::linked_ptr<_Ty2>& _Right) {
-    using _Ptr1 = typename recursive::linked_ptr<_Ty1>::pointer;
-    using _Ptr2 = typename recursive::linked_ptr<_Ty2>::pointer;
+_NODISCARD bool operator<(const linked::linked_ptr<_Ty1>& _Left,
+                          const linked::linked_ptr<_Ty2>& _Right) {
+    using _Ptr1 = typename linked::linked_ptr<_Ty1>::pointer;
+    using _Ptr2 = typename linked::linked_ptr<_Ty2>::pointer;
     using _Common = std::common_type_t<_Ptr1, _Ptr2>;
     return std::less<_Common>()(_Left.get(), _Right.get());
 }
 
 template <class _Ty1, class _Ty2>
-_NODISCARD bool operator>=(const recursive::linked_ptr<_Ty1>& _Left,
-                           const recursive::linked_ptr<_Ty2>& _Right) {
+_NODISCARD bool operator>=(const linked::linked_ptr<_Ty1>& _Left,
+                           const linked::linked_ptr<_Ty2>& _Right) {
     return !(_Left < _Right);
 }
 
 template <class _Ty1, class _Ty2>
-_NODISCARD bool operator>(const recursive::linked_ptr<_Ty1>& _Left,
-                          const recursive::linked_ptr<_Ty2>& _Right) {
+_NODISCARD bool operator>(const linked::linked_ptr<_Ty1>& _Left,
+                          const linked::linked_ptr<_Ty2>& _Right) {
     return _Right < _Left;
 }
 
 template <class _Ty1, class _Ty2>
-_NODISCARD bool operator<=(const recursive::linked_ptr<_Ty1>& _Left,
-                           const recursive::linked_ptr<_Ty2>& _Right) {
+_NODISCARD bool operator<=(const linked::linked_ptr<_Ty1>& _Left,
+                           const linked::linked_ptr<_Ty2>& _Right) {
     return !(_Right < _Left);
 }
 
 template <class _Ty>
-_NODISCARD bool operator==(const recursive::linked_ptr<_Ty>& _Left,
+_NODISCARD bool operator==(const linked::linked_ptr<_Ty>& _Left,
                            nullptr_t) noexcept {
     return !_Left;
 }
 
 template <class _Ty>
 _NODISCARD bool operator==(nullptr_t,
-                           const recursive::linked_ptr<_Ty>& _Right) noexcept {
+                           const linked::linked_ptr<_Ty>& _Right) noexcept {
     return !_Right;
 }
 
 template <class _Ty>
-_NODISCARD bool operator!=(const recursive::linked_ptr<_Ty>& _Left,
+_NODISCARD bool operator!=(const linked::linked_ptr<_Ty>& _Left,
                            nullptr_t _Right) noexcept {
     return !(_Left == _Right);
 }
 
 template <class _Ty>
 _NODISCARD bool operator!=(nullptr_t _Left,
-                           const recursive::linked_ptr<_Ty>& _Right) noexcept {
+                           const linked::linked_ptr<_Ty>& _Right) noexcept {
     return !(_Left == _Right);
 }
 
 template <class _Ty>
-_NODISCARD bool operator<(const recursive::linked_ptr<_Ty>& _Left,
+_NODISCARD bool operator<(const linked::linked_ptr<_Ty>& _Left,
                           nullptr_t _Right) {
-    using _Ptr = typename recursive::linked_ptr<_Ty>::pointer;
+    using _Ptr = typename linked::linked_ptr<_Ty>::pointer;
     return std::less<_Ptr>()(_Left.get(), _Right);
 }
 
 template <class _Ty>
 _NODISCARD bool operator<(nullptr_t _Left,
-                          const recursive::linked_ptr<_Ty>& _Right) {
-    using _Ptr = typename recursive::linked_ptr<_Ty>::pointer;
+                          const linked::linked_ptr<_Ty>& _Right) {
+    using _Ptr = typename linked::linked_ptr<_Ty>::pointer;
     return std::less<_Ptr>()(_Left, _Right.get());
 }
 
 template <class _Ty>
-_NODISCARD bool operator>=(const recursive::linked_ptr<_Ty>& _Left,
+_NODISCARD bool operator>=(const linked::linked_ptr<_Ty>& _Left,
                            nullptr_t _Right) {
     return !(_Left < _Right);
 }
 
 template <class _Ty>
 _NODISCARD bool operator>=(nullptr_t _Left,
-                           const recursive::linked_ptr<_Ty>& _Right) {
+                           const linked::linked_ptr<_Ty>& _Right) {
     return !(_Left < _Right);
 }
 
 template <class _Ty>
-_NODISCARD bool operator>(const recursive::linked_ptr<_Ty>& _Left,
+_NODISCARD bool operator>(const linked::linked_ptr<_Ty>& _Left,
                           nullptr_t _Right) {
     return _Right < _Left;
 }
 
 template <class _Ty>
 _NODISCARD bool operator>(nullptr_t _Left,
-                          const recursive::linked_ptr<_Ty>& _Right) {
+                          const linked::linked_ptr<_Ty>& _Right) {
     return _Right < _Left;
 }
 
 template <class _Ty>
-_NODISCARD bool operator<=(const recursive::linked_ptr<_Ty>& _Left,
+_NODISCARD bool operator<=(const linked::linked_ptr<_Ty>& _Left,
                            nullptr_t _Right) {
     return !(_Right < _Left);
 }
 
 template <class _Ty>
 _NODISCARD bool operator<=(nullptr_t _Left,
-                           const recursive::linked_ptr<_Ty>& _Right) {
+                           const linked::linked_ptr<_Ty>& _Right) {
     return !(_Right < _Left);
 }
