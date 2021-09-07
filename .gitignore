@@ -31,4 +31,4 @@
 *.out
 *.app
 
-recursive_ptr_test/
+linked_ptr_test/
