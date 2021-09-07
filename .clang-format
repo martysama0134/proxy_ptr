@@ -1,0 +1,16 @@
+# Run manually to reformat a file:
+# clang-format -i --style=file <file>
+Language: Cpp
+BasedOnStyle: Google
+IndentPPDirectives: AfterHash
+IndentCaseLabels: false
+AlwaysBreakTemplateDeclarations: false
+DerivePointerAlignment: false
+FixNamespaceComments : true
+NamespaceIndentation : All
+IndentWidth : 4
+Standard : Auto
+AllowShortIfStatementsOnASingleLine: false
+IndentPPDirectives : BeforeHash
+SortIncludes : false
+AllowShortLoopsOnASingleLine : false
