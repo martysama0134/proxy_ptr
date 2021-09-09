@@ -232,7 +232,7 @@ namespace linked {
         void linked_assign(pointer ptr) { super_t::_linked_assign(ptr); }
         void linked_delete() { super_t::_linked_delete(); }
         void detach() { super_t::_detach(); }
-        _NODISCARD pointer linked_release() {
+        [[nodiscard]] pointer linked_release() {
             return super_t::_linked_release();
         }
         ~linked_ptr() {
@@ -285,7 +285,7 @@ namespace linked {
         void linked_assign(pointer ptr) { super_t::_linked_assign(ptr); }
         void linked_delete() { super_t::_linked_delete(); }
         void detach() { super_t::_detach(); }
-        _NODISCARD pointer linked_release() {
+        [[nodiscard]] pointer linked_release() {
             return super_t::_linked_release();
         }
         ~linked_ptr() { detach(); }
@@ -293,7 +293,7 @@ namespace linked {
 
     template <class _Ty, class... TyArgs,
               std::enable_if_t<!std::is_array<_Ty>::value, int> = 0>
-    _NODISCARD linked_ptr<_Ty> make_linked(TyArgs&&... VArgs) {
+    [[nodiscard]] linked_ptr<_Ty> make_linked(TyArgs&&... VArgs) {
         return std::move(
             linked_ptr<_Ty>(new _Ty(std::forward<TyArgs>(VArgs)...)));
     }
@@ -301,30 +301,30 @@ namespace linked {
     template <class _Ty,
               std::enable_if_t<std::is_array_v<_Ty> && std::extent_v<_Ty> == 0,
                                int> = 0>
-    _NODISCARD linked_ptr<_Ty> make_linked(const std::size_t size) {
+    [[nodiscard]] linked_ptr<_Ty> make_linked(const std::size_t size) {
         using _Elem = std::remove_extent_t<_Ty>;
         return std::move(linked_ptr<_Ty>(new _Elem[size]));
     }
 
     template <class _Ty, class = std::enable_if_t<std::extent_v<_Ty> != 0, int>>
-    _NODISCARD linked_ptr<_Ty> make_linked(const std::size_t) = delete;
+    [[nodiscard]] linked_ptr<_Ty> make_linked(const std::size_t) = delete;
 
 }  // namespace linked
 
 template <class _Ty1, class _Ty2>
-_NODISCARD bool operator==(const linked::linked_ptr<_Ty1>& _Left,
+[[nodiscard]] bool operator==(const linked::linked_ptr<_Ty1>& _Left,
                            const linked::linked_ptr<_Ty2>& _Right) {
     return _Left.get() == _Right.get();
 }
 
 template <class _Ty1, class _Ty2>
-_NODISCARD bool operator!=(const linked::linked_ptr<_Ty1>& _Left,
+[[nodiscard]] bool operator!=(const linked::linked_ptr<_Ty1>& _Left,
                            const linked::linked_ptr<_Ty2>& _Right) {
     return !(_Left == _Right);
 }
 
 template <class _Ty1, class _Ty2>
-_NODISCARD bool operator<(const linked::linked_ptr<_Ty1>& _Left,
+[[nodiscard]] bool operator<(const linked::linked_ptr<_Ty1>& _Left,
                           const linked::linked_ptr<_Ty2>& _Right) {
     using _Ptr1 = typename linked::linked_ptr<_Ty1>::pointer;
     using _Ptr2 = typename linked::linked_ptr<_Ty2>::pointer;
@@ -333,93 +333,93 @@ _NODISCARD bool operator<(const linked::linked_ptr<_Ty1>& _Left,
 }
 
 template <class _Ty1, class _Ty2>
-_NODISCARD bool operator>=(const linked::linked_ptr<_Ty1>& _Left,
+[[nodiscard]] bool operator>=(const linked::linked_ptr<_Ty1>& _Left,
                            const linked::linked_ptr<_Ty2>& _Right) {
     return !(_Left < _Right);
 }
 
 template <class _Ty1, class _Ty2>
-_NODISCARD bool operator>(const linked::linked_ptr<_Ty1>& _Left,
+[[nodiscard]] bool operator>(const linked::linked_ptr<_Ty1>& _Left,
                           const linked::linked_ptr<_Ty2>& _Right) {
     return _Right < _Left;
 }
 
 template <class _Ty1, class _Ty2>
-_NODISCARD bool operator<=(const linked::linked_ptr<_Ty1>& _Left,
+[[nodiscard]] bool operator<=(const linked::linked_ptr<_Ty1>& _Left,
                            const linked::linked_ptr<_Ty2>& _Right) {
     return !(_Right < _Left);
 }
 
 template <class _Ty>
-_NODISCARD bool operator==(const linked::linked_ptr<_Ty>& _Left,
+[[nodiscard]] bool operator==(const linked::linked_ptr<_Ty>& _Left,
                            nullptr_t) noexcept {
     return !_Left;
 }
 
 template <class _Ty>
-_NODISCARD bool operator==(nullptr_t,
+[[nodiscard]] bool operator==(nullptr_t,
                            const linked::linked_ptr<_Ty>& _Right) noexcept {
     return !_Right;
 }
 
 template <class _Ty>
-_NODISCARD bool operator!=(const linked::linked_ptr<_Ty>& _Left,
+[[nodiscard]] bool operator!=(const linked::linked_ptr<_Ty>& _Left,
                            nullptr_t _Right) noexcept {
     return !(_Left == _Right);
 }
 
 template <class _Ty>
-_NODISCARD bool operator!=(nullptr_t _Left,
+[[nodiscard]] bool operator!=(nullptr_t _Left,
                            const linked::linked_ptr<_Ty>& _Right) noexcept {
     return !(_Left == _Right);
 }
 
 template <class _Ty>
-_NODISCARD bool operator<(const linked::linked_ptr<_Ty>& _Left,
+[[nodiscard]] bool operator<(const linked::linked_ptr<_Ty>& _Left,
                           nullptr_t _Right) {
     using _Ptr = typename linked::linked_ptr<_Ty>::pointer;
     return std::less<_Ptr>()(_Left.get(), _Right);
 }
 
 template <class _Ty>
-_NODISCARD bool operator<(nullptr_t _Left,
+[[nodiscard]] bool operator<(nullptr_t _Left,
                           const linked::linked_ptr<_Ty>& _Right) {
     using _Ptr = typename linked::linked_ptr<_Ty>::pointer;
     return std::less<_Ptr>()(_Left, _Right.get());
 }
 
 template <class _Ty>
-_NODISCARD bool operator>=(const linked::linked_ptr<_Ty>& _Left,
+[[nodiscard]] bool operator>=(const linked::linked_ptr<_Ty>& _Left,
                            nullptr_t _Right) {
     return !(_Left < _Right);
 }
 
 template <class _Ty>
-_NODISCARD bool operator>=(nullptr_t _Left,
+[[nodiscard]] bool operator>=(nullptr_t _Left,
                            const linked::linked_ptr<_Ty>& _Right) {
     return !(_Left < _Right);
 }
 
 template <class _Ty>
-_NODISCARD bool operator>(const linked::linked_ptr<_Ty>& _Left,
+[[nodiscard]] bool operator>(const linked::linked_ptr<_Ty>& _Left,
                           nullptr_t _Right) {
     return _Right < _Left;
 }
 
 template <class _Ty>
-_NODISCARD bool operator>(nullptr_t _Left,
+[[nodiscard]] bool operator>(nullptr_t _Left,
                           const linked::linked_ptr<_Ty>& _Right) {
     return _Right < _Left;
 }
 
 template <class _Ty>
-_NODISCARD bool operator<=(const linked::linked_ptr<_Ty>& _Left,
+[[nodiscard]] bool operator<=(const linked::linked_ptr<_Ty>& _Left,
                            nullptr_t _Right) {
     return !(_Right < _Left);
 }
 
 template <class _Ty>
-_NODISCARD bool operator<=(nullptr_t _Left,
+[[nodiscard]] bool operator<=(nullptr_t _Left,
                            const linked::linked_ptr<_Ty>& _Right) {
     return !(_Right < _Left);
 }
