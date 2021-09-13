@@ -203,15 +203,15 @@ namespace linked {
         using super_t = detail::_linked_node<_Ty, linked_ptr<_Ty>>;
         using pointer = typename super_t::pointer;
         using deleter_t = typename super_t::deleter_t;
-        using noderef_t = linked_ptr<_Ty>&;
+        using nodeconstref_t = const linked_ptr<_Ty>&;
         using moveref_t = linked_ptr<_Ty>&&;
 
        public:
         linked_ptr() { super_t::_set_orphan(nullptr); }
         linked_ptr(pointer ptr) { super_t::_set_orphan(ptr); }
-        linked_ptr(const noderef_t parent) { parent._add_child(this); }
+        linked_ptr(nodeconstref_t parent) { parent._add_child(this); }
         linked_ptr(moveref_t other) { other._detach(this); }
-        linked_ptr& operator=(const noderef_t parent) {
+        linked_ptr& operator=(nodeconstref_t parent) {
             parent._add_child(this);
             return *this;
         }
@@ -250,7 +250,7 @@ namespace linked {
                                              linked_default_delete<_Ty[]>>;
         using pointer = typename super_t::pointer;
         using deleter_t = typename super_t::deleter_t;
-        using noderef_t = linked_ptr<_Ty[]>&;
+        using nodeconstref_t = const linked_ptr<_Ty[]>&;
         using moveref_t = linked_ptr<_Ty[]>&&;
         using element_t = _Ty;
 
@@ -266,9 +266,9 @@ namespace linked {
         linked_ptr(_Ty2 ptr) {
             super_t::_set_orphan(ptr);
         }
-        linked_ptr(const noderef_t parent) { parent._add_child(this); }
+        linked_ptr(nodeconstref_t parent) { parent._add_child(this); }
         linked_ptr(moveref_t other) { other._detach(this); }
-        linked_ptr& operator=(const noderef_t parent) {
+        linked_ptr& operator=(nodeconstref_t parent) {
             parent._add_child(this);
             return *this;
         }
@@ -313,19 +313,19 @@ namespace linked {
 
 template <class _Ty1, class _Ty2>
 [[nodiscard]] bool operator==(const linked::linked_ptr<_Ty1>& _Left,
-                           const linked::linked_ptr<_Ty2>& _Right) {
+                              const linked::linked_ptr<_Ty2>& _Right) {
     return _Left.get() == _Right.get();
 }
 
 template <class _Ty1, class _Ty2>
 [[nodiscard]] bool operator!=(const linked::linked_ptr<_Ty1>& _Left,
-                           const linked::linked_ptr<_Ty2>& _Right) {
+                              const linked::linked_ptr<_Ty2>& _Right) {
     return !(_Left == _Right);
 }
 
 template <class _Ty1, class _Ty2>
 [[nodiscard]] bool operator<(const linked::linked_ptr<_Ty1>& _Left,
-                          const linked::linked_ptr<_Ty2>& _Right) {
+                             const linked::linked_ptr<_Ty2>& _Right) {
     using _Ptr1 = typename linked::linked_ptr<_Ty1>::pointer;
     using _Ptr2 = typename linked::linked_ptr<_Ty2>::pointer;
     using _Common = std::common_type_t<_Ptr1, _Ptr2>;
@@ -334,92 +334,92 @@ template <class _Ty1, class _Ty2>
 
 template <class _Ty1, class _Ty2>
 [[nodiscard]] bool operator>=(const linked::linked_ptr<_Ty1>& _Left,
-                           const linked::linked_ptr<_Ty2>& _Right) {
+                              const linked::linked_ptr<_Ty2>& _Right) {
     return !(_Left < _Right);
 }
 
 template <class _Ty1, class _Ty2>
 [[nodiscard]] bool operator>(const linked::linked_ptr<_Ty1>& _Left,
-                          const linked::linked_ptr<_Ty2>& _Right) {
+                             const linked::linked_ptr<_Ty2>& _Right) {
     return _Right < _Left;
 }
 
 template <class _Ty1, class _Ty2>
 [[nodiscard]] bool operator<=(const linked::linked_ptr<_Ty1>& _Left,
-                           const linked::linked_ptr<_Ty2>& _Right) {
+                              const linked::linked_ptr<_Ty2>& _Right) {
     return !(_Right < _Left);
 }
 
 template <class _Ty>
 [[nodiscard]] bool operator==(const linked::linked_ptr<_Ty>& _Left,
-                           nullptr_t) noexcept {
+                              nullptr_t) noexcept {
     return !_Left;
 }
 
 template <class _Ty>
 [[nodiscard]] bool operator==(nullptr_t,
-                           const linked::linked_ptr<_Ty>& _Right) noexcept {
+                              const linked::linked_ptr<_Ty>& _Right) noexcept {
     return !_Right;
 }
 
 template <class _Ty>
 [[nodiscard]] bool operator!=(const linked::linked_ptr<_Ty>& _Left,
-                           nullptr_t _Right) noexcept {
+                              nullptr_t _Right) noexcept {
     return !(_Left == _Right);
 }
 
 template <class _Ty>
 [[nodiscard]] bool operator!=(nullptr_t _Left,
-                           const linked::linked_ptr<_Ty>& _Right) noexcept {
+                              const linked::linked_ptr<_Ty>& _Right) noexcept {
     return !(_Left == _Right);
 }
 
 template <class _Ty>
 [[nodiscard]] bool operator<(const linked::linked_ptr<_Ty>& _Left,
-                          nullptr_t _Right) {
+                             nullptr_t _Right) {
     using _Ptr = typename linked::linked_ptr<_Ty>::pointer;
     return std::less<_Ptr>()(_Left.get(), _Right);
 }
 
 template <class _Ty>
 [[nodiscard]] bool operator<(nullptr_t _Left,
-                          const linked::linked_ptr<_Ty>& _Right) {
+                             const linked::linked_ptr<_Ty>& _Right) {
     using _Ptr = typename linked::linked_ptr<_Ty>::pointer;
     return std::less<_Ptr>()(_Left, _Right.get());
 }
 
 template <class _Ty>
 [[nodiscard]] bool operator>=(const linked::linked_ptr<_Ty>& _Left,
-                           nullptr_t _Right) {
+                              nullptr_t _Right) {
     return !(_Left < _Right);
 }
 
 template <class _Ty>
 [[nodiscard]] bool operator>=(nullptr_t _Left,
-                           const linked::linked_ptr<_Ty>& _Right) {
+                              const linked::linked_ptr<_Ty>& _Right) {
     return !(_Left < _Right);
 }
 
 template <class _Ty>
 [[nodiscard]] bool operator>(const linked::linked_ptr<_Ty>& _Left,
-                          nullptr_t _Right) {
+                             nullptr_t _Right) {
     return _Right < _Left;
 }
 
 template <class _Ty>
 [[nodiscard]] bool operator>(nullptr_t _Left,
-                          const linked::linked_ptr<_Ty>& _Right) {
+                             const linked::linked_ptr<_Ty>& _Right) {
     return _Right < _Left;
 }
 
 template <class _Ty>
 [[nodiscard]] bool operator<=(const linked::linked_ptr<_Ty>& _Left,
-                           nullptr_t _Right) {
+                              nullptr_t _Right) {
     return !(_Right < _Left);
 }
 
 template <class _Ty>
 [[nodiscard]] bool operator<=(nullptr_t _Left,
-                           const linked::linked_ptr<_Ty>& _Right) {
+                              const linked::linked_ptr<_Ty>& _Right) {
     return !(_Right < _Left);
 }
