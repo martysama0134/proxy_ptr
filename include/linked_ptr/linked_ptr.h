@@ -66,7 +66,7 @@ namespace linked {
             void _set_head(nodeptr_t ptr) { this->_head = ptr; }
             void _set_nodes(nodeset_t* ptr) { this->_node_set = ptr; }
 
-            void _add_child(nodeptr_t child) {
+            void _add_child(nodeptr_t child) const {
                 assert(child);
                 assert(this->_head);
 
@@ -172,7 +172,7 @@ namespace linked {
 
             nodeptr_t _get_next_head() { return *this->_node_set->begin(); }
 
-            void _allocate_set() {
+            void _allocate_set() const {
                 if (_is_head() && !this->_node_set)
                     this->_node_set = new nodeset_t;
             }
@@ -423,3 +423,14 @@ template <class _Ty>
                               const linked::linked_ptr<_Ty>& _Right) {
     return !(_Right < _Left);
 }
+
+template <class Type> class std::hash<linked::linked_ptr<Type>> {
+    auto operator()(const linked::linked_ptr<Type> ptr) { return ptr.get(); }
+};
+
+template <class Type> struct std::less<linked::linked_ptr<Type>> {
+    bool operator()(const linked::linked_ptr<Type>& lhs,
+                    const linked::linked_ptr<Type>& rhs) const {
+        return lhs < rhs;
+    }
+};
