@@ -169,7 +169,7 @@ namespace linked {
                 auto old = this->_ptr;
                 if (old) {
                     _on_each_node([](auto node) {
-                        node->set_ptr(nullptr);
+                        node->_set_ptr(nullptr);
                         node->_notify();
                     });
                 }
@@ -222,7 +222,10 @@ namespace linked {
             parent._add_child(this);
             return *this;
         }
-        linked_ptr& operator=(moveref_t other) { other._detach(this); }
+        linked_ptr& operator=(moveref_t other) {
+            other._detach(this);
+            return *this;
+        }
         linked_ptr& operator=(nullptr_t) noexcept {
             detach();
             return *this;
@@ -279,7 +282,10 @@ namespace linked {
             parent._add_child(this);
             return *this;
         }
-        linked_ptr& operator=(moveref_t other) { other._detach(this); }
+        linked_ptr& operator=(moveref_t other) {
+            other._detach(this);
+            return *this;
+        }
         linked_ptr& operator=(nullptr_t) noexcept {
             detach();
             return *this;
