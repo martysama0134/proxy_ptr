@@ -12,40 +12,44 @@ double get_time() {
 }
 
 int main() {
-    auto size = 5000;
-    constexpr auto array_size = 100000;
-    constexpr auto times = 10;
+    {
+        auto start = get_time();
+        auto root = linked::make_linked<char[]>(1000);
+        for (int j = 0; j < 1; j++) {
+            for (int i = 0; i < 100000; i++) {
+                auto root2 = linked::make_linked<char[]>(1000);
+                root2 = root;
 
-    auto t3 = get_time();
-    for (int t = 0; t < times; t++) {
-        auto s = linked::make_linked<char[]>(size);
-        std::vector<linked::linked_ptr<char[]>> ar;
-        ar.resize(array_size);
-        for (int i = 0; i < array_size; i++)
-            ar[i] = s;
-        s.linked_delete();
-    }
-    auto t4 = get_time();
+                linked::linked_ptr<char[]> ptr;
+                ptr = root2;
+            }
+        }
 
-    std::cout << "linked_ptr time : " << t4 - t3 << " seconds" << std::endl;
+        auto end = get_time();
+        auto time = end - start;
 
-    t3 = get_time();
-    for (int t = 0; t < times; t++) {
-        auto s = new char[size];
-        std::vector<char*> ar;
-        ar.resize(array_size);
-        for (int i = 0; i < array_size; i++)
-            ar[i] = s;
-        for (int i = 0; i < array_size; i++)
-            ar[i] = nullptr;
-        delete[] s;
-        s = nullptr;
+        std::cout << "t1 : finish in " << time << std::endl;
     }
 
-    t4 = get_time();
+    {
+        auto start = get_time();
+        auto root = std::make_shared<char[]>(1000);
+        for (int j = 0; j < 1; j++) {
+            for (int i = 0; i < 100000; i++) {
+                auto root2 = std::make_shared<char[]>(1000);
+                root2 = root;
 
-    std::cout << "raw_ptr time : " << t4 - t3 << " seconds" << std::endl;
+                std::shared_ptr<char[]> ptr;
+                ptr = root2;
+            }
+        }
 
-    std::string in;
-    std::cin >> in;
+        auto end = get_time();
+        auto time = end - start;
+        std::cout << "t2 : finish in " << time << std::endl;
+    }
+
+    std::string s;
+    std::cin >> s;
+    return 0;
 }

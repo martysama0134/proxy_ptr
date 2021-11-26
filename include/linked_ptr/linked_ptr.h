@@ -73,6 +73,12 @@ namespace linked {
                 if (this == child)
                     return;
 
+                if (child->_is_orphan())
+                    child->_delete_node_set();
+
+                if (!child->_is_orphan())
+                    child->_detach();
+
                 if (_is_head())
                     _allocate_set();
 
@@ -180,6 +186,7 @@ namespace linked {
             void _set_orphan(pointer val) {
                 this->_head = _this_node();
                 this->_ptr = val;
+                _allocate_set();
             }
 
             void _delete_notifier() {
