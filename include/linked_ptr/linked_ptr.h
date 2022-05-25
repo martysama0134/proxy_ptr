@@ -41,7 +41,7 @@ namespace linked {
            public:
             using pointer = _Ty*;
             using object_t = _Ty;
-            using nodeptr_t = _PtrClass*;
+            using nodeptr_t = _linked_node*;
             using deleter_t = _Dx;
             using notifier_t = std::function<void(const _PtrClass&)>;
             using nodeset_t = std::unordered_set<nodeptr_t>;
@@ -53,9 +53,50 @@ namespace linked {
                 *this->_notifier = notifier;
             }
 
-           protected:
-            nodeptr_t _this_node() { return static_cast<nodeptr_t>(this); }
+            void linked_assign(pointer ptr) {
+                _delete_ptr();
+                _on_each_node([&](auto node) {
+                    node->_set_ptr(ptr);
+                    node->_notify();
+                });
+            }
 
+            void linked_delete() { linked_assign(nullptr); }
+
+            [[nodiscard]] pointer linked_release() {
+                auto old = this->_ptr;
+                this->_ptr = nullptr;
+                linked_assign(nullptr);
+                return old;
+            }
+
+            void detach(nodeptr_t newptr = nullptr) {
+                if (this == newptr)
+                    return;
+                if (this->_node_set)
+                    this->_node_set->erase(this);
+
+                if (_is_orphan() && !newptr) {
+                    _delete_ptr();
+                    _delete_node_set();
+                    return;
+                }
+
+                if (_is_head() &&
+                    (newptr = newptr ? newptr : _get_next_head())) {
+                    _allocate_set();
+                    this->_node_set->emplace(newptr);
+                    newptr->_set_nodes(this->_node_set);
+                    newptr->_set_ptr(this->_ptr);
+                    _on_each_node([&](auto node) { node->_set_head(newptr); });
+                }
+
+                this->_ptr = nullptr;
+                this->_node_set = nullptr;
+                this->_head = this;
+            }
+
+           protected:
             bool _is_head() const { return this == this->_head; }
             bool _is_orphan() const {
                 return _is_head() &&
@@ -66,18 +107,21 @@ namespace linked {
             void _set_head(nodeptr_t ptr) { this->_head = ptr; }
             void _set_nodes(nodeset_t* ptr) { this->_node_set = ptr; }
 
+            bool _is_node(nodeptr_t ptr) const {
+                return this->_node_set &&
+                       this->_node_set->find(ptr) != this->_node_set->end();
+            }
+
             void _add_child(nodeptr_t child) const {
                 assert(child);
                 assert(this->_head);
 
                 if (this == child)
                     return;
+                if (this->_is_node(child))
+                    return;
 
-                if (child->_is_orphan())
-                    child->_delete_node_set();
-
-                if (!child->_is_orphan())
-                    child->_detach();
+                child->detach();
 
                 if (_is_head())
                     _allocate_set();
@@ -93,52 +137,28 @@ namespace linked {
             nodeptr_t _get_head() const { return this->_head; }
             deleter_t _get_deleter() { return deleter_t(); }
 
-            void _detach(nodeptr_t newptr = nullptr) {
-                if (this == newptr)
-                    return;
-
-                if (this->_node_set)
-                    this->_node_set->erase(_this_node());
-
-                if (_is_orphan() && !newptr) {
-                    _delete_ptr();
-                    _delete_node_set();
-                    return;
-                }
-
-                if (_is_head()) {
-                    _allocate_set();
-                    newptr = newptr ? newptr : _get_next_head();
-                    newptr->_set_nodes(this->_node_set);
-                    newptr->_set_ptr(this->_ptr);
-                    this->_node_set->emplace(newptr);
-                    _on_each_node([&](auto node) { node->_set_head(newptr); });
-                }
-
-                else {
-                    this->_node_set->erase(_this_node());
-                    this->_ptr = nullptr;
-                    this->_node_set = nullptr;
-                    this->_head = _this_node();
-                }
+            void _move(nodeptr_t ptr) {
+                _add_child(ptr);
+                detach();
             }
 
-            void _on_each_node(std::function<void(nodeptr_t)> Func) {
+            void _on_each_node(std::function<void(_PtrClass*)> Func) {
                 if (this->_node_set) {
                     for (auto& node : *this->_node_set)
-                        Func(node);
+                        Func(static_cast<_PtrClass*>(node));
                 }
             }
 
             void _notify() {
-                if (this->_notifier)
-                    (*this->_notifier)(*static_cast<nodeptr_t>(this));
+                if (this->_notifier && *this->_notifier)
+                    (*this->_notifier)(*static_cast<_PtrClass*>(this));
             }
 
             void _delete_ptr() {
                 if (this->_ptr) {
-                    _get_deleter()(this->_ptr);
+                    auto old = this->_ptr;
                     this->_ptr = nullptr;
+                    _get_deleter()(old);
                 }
             }
 
@@ -149,34 +169,11 @@ namespace linked {
                 }
             }
 
-            void _linked_assign(pointer ptr) {
-                _delete_ptr();
-                _on_each_node([&](auto node) {
-                    node->set_ptr(ptr);
-                    node->_notify();
-                });
+            nodeptr_t _get_next_head() {
+                return this->_node_set && !this->_node_set->empty()
+                           ? *this->_node_set->begin()
+                           : nullptr;
             }
-
-            void _linked_delete() {
-                _delete_ptr();
-                _on_each_node([](auto node) {
-                    node->_set_ptr(nullptr);
-                    node->_notify();
-                });
-            }
-
-            pointer _linked_release() {
-                auto old = this->_ptr;
-                if (old) {
-                    _on_each_node([](auto node) {
-                        node->_set_ptr(nullptr);
-                        node->_notify();
-                    });
-                }
-                return old;
-            }
-
-            nodeptr_t _get_next_head() { return *this->_node_set->begin(); }
 
             void _allocate_set() const {
                 if (_is_head() && !this->_node_set)
@@ -184,7 +181,7 @@ namespace linked {
             }
 
             void _set_orphan(pointer val) {
-                this->_head = _this_node();
+                this->_head = this;
                 this->_ptr = val;
                 _allocate_set();
             }
@@ -196,8 +193,13 @@ namespace linked {
                 }
             }
 
+            virtual ~_linked_node() {
+                detach();
+                _delete_notifier();
+            }
+
            protected:
-            mutable nodeptr_t _head = nullptr;
+            mutable nodeptr_t _head = this;
             mutable nodeset_t* _node_set = nullptr;
             pointer _ptr = nullptr;
             notifier_t* _notifier = nullptr;
@@ -217,17 +219,17 @@ namespace linked {
         linked_ptr() { super_t::_set_orphan(nullptr); }
         linked_ptr(pointer ptr) { super_t::_set_orphan(ptr); }
         linked_ptr(nodeconstref_t parent) { parent._add_child(this); }
-        linked_ptr(moveref_t other) { other._detach(this); }
+        linked_ptr(moveref_t other) { other._move(this); }
         linked_ptr& operator=(nodeconstref_t parent) {
             parent._add_child(this);
             return *this;
         }
         linked_ptr& operator=(moveref_t other) {
-            other._detach(this);
+            other._move(this);
             return *this;
         }
         linked_ptr& operator=(nullptr_t) noexcept {
-            detach();
+            this->detach();
             return *this;
         }
         pointer operator->() const { return get(); }
@@ -239,16 +241,7 @@ namespace linked {
         explicit operator pointer() const { return this->_ptr; }
         pointer ptr() const { return this->_ptr; }
         pointer get() const { return this->_ptr; }
-        void linked_assign(pointer ptr) { super_t::_linked_assign(ptr); }
-        void linked_delete() { super_t::_linked_delete(); }
-        void detach() { super_t::_detach(); }
-        [[nodiscard]] pointer linked_release() {
-            return super_t::_linked_release();
-        }
-        ~linked_ptr() {
-            detach();
-            super_t::_delete_notifier();
-        }
+        virtual ~linked_ptr() {}
     };
 
     template <class _Ty>
@@ -277,17 +270,17 @@ namespace linked {
             super_t::_set_orphan(ptr);
         }
         linked_ptr(nodeconstref_t parent) { parent._add_child(this); }
-        linked_ptr(moveref_t other) { other._detach(this); }
+        linked_ptr(moveref_t other) { other._move(this); }
         linked_ptr& operator=(nodeconstref_t parent) {
             parent._add_child(this);
             return *this;
         }
         linked_ptr& operator=(moveref_t other) {
-            other._detach(this);
+            other._move(this);
             return *this;
         }
         linked_ptr& operator=(nullptr_t) noexcept {
-            detach();
+            this->detach();
             return *this;
         }
         pointer operator->() const { return get(); }
@@ -295,13 +288,7 @@ namespace linked {
         explicit operator pointer() const { return this->_ptr; }
         pointer ptr() const { return this->_ptr; }
         pointer get() const { return this->_ptr; }
-        void linked_assign(pointer ptr) { super_t::_linked_assign(ptr); }
-        void linked_delete() { super_t::_linked_delete(); }
-        void detach() { super_t::_detach(); }
-        [[nodiscard]] pointer linked_release() {
-            return super_t::_linked_release();
-        }
-        ~linked_ptr() { detach(); }
+        virtual ~linked_ptr() {}
     };
 
     template <class _Ty, class... TyArgs,
