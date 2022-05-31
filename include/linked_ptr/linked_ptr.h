@@ -193,7 +193,8 @@ namespace linked {
                 }
             }
 
-            virtual ~_linked_node() {
+           protected:
+            ~_linked_node() {
                 detach();
                 _delete_notifier();
             }
@@ -241,7 +242,7 @@ namespace linked {
         explicit operator pointer() const { return this->_ptr; }
         pointer ptr() const { return this->_ptr; }
         pointer get() const { return this->_ptr; }
-        virtual ~linked_ptr() {}
+        ~linked_ptr() { this->super_t::~super_t(); }
     };
 
     template <class _Ty>
@@ -289,7 +290,7 @@ namespace linked {
         explicit operator pointer() const { return this->_ptr; }
         pointer ptr() const { return this->_ptr; }
         pointer get() const { return this->_ptr; }
-        virtual ~linked_ptr() {}
+        ~linked_ptr() { this->super_t::~super_t(); }
     };
 
     template <class _Ty, class... TyArgs,
