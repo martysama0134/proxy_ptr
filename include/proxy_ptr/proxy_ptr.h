@@ -79,6 +79,9 @@ namespace proxy {
         proxy_ptr(const proxy_ptr& n) { _proxy_from(n); }
         proxy_ptr(_Ty* r) { _detach(new _common_Ptr_Ty(r)); }
 
+        operator bool() const { return (_is_Pointing() && _ppobj->get()); }
+        explicit operator _Ty*() const { return get(); }
+
         _Ty* get() const {
             if (!_is_Pointing())
                 return nullptr;
@@ -99,6 +102,13 @@ namespace proxy {
         _Ty2* operator[](std::ptrdiff_t p) const {
             assert(_is_Pointing());
             return (*get())[p];
+        }
+
+        template <class _Ty2 = _Ty,
+                  class = std::enable_if_t<!std::is_array_v<_Ty2>>>
+        _Ty2* operator*() const {
+            assert(_is_Pointing());
+            return *get();
         }
 
         decltype(auto) operator=(const proxy_ptr<_Ty>& r) {
