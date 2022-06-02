@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <unordered_set>
 
+// This implementation doesn't currently support multithreading
 namespace linked {
     template <class _Ty> struct linked_default_delete {
         constexpr linked_default_delete() noexcept = default;
@@ -234,10 +235,7 @@ namespace linked {
             return *this;
         }
         pointer operator->() const { return get(); }
-        std::add_lvalue_reference_t<_Ty> operator*() const { return get(); }
-        std::add_lvalue_reference_t<_Ty> operator[](std::size_t s) const {
-            return this->_ptr[s];
-        };
+        std::add_lvalue_reference_t<_Ty> operator*() const { return *get(); }
         operator bool() const { return (this->_ptr); }
         explicit operator pointer() const { return this->_ptr; }
         pointer ptr() const { return this->_ptr; }
@@ -290,14 +288,17 @@ namespace linked {
         explicit operator pointer() const { return this->_ptr; }
         pointer ptr() const { return this->_ptr; }
         pointer get() const { return this->_ptr; }
+        std::add_lvalue_reference_t<_Ty> operator*() const { return *get(); }
+        std::add_lvalue_reference_t<_Ty> operator[](std::size_t s) const {
+            return (*this->_ptr)[s];
+        };
         ~linked_ptr() { this->super_t::~super_t(); }
     };
 
     template <class _Ty, class... TyArgs,
               std::enable_if_t<!std::is_array<_Ty>::value, int> = 0>
     [[nodiscard]] linked_ptr<_Ty> make_linked(TyArgs&&... VArgs) {
-        return std::move(
-            linked_ptr<_Ty>(new _Ty(std::forward<TyArgs>(VArgs)...)));
+        return {new _Ty(std::forward<TyArgs>(VArgs)...)};
     }
 
     template <class _Ty,
@@ -305,7 +306,7 @@ namespace linked {
                                int> = 0>
     [[nodiscard]] linked_ptr<_Ty> make_linked(const std::size_t size) {
         using _Elem = std::remove_extent_t<_Ty>;
-        return std::move(linked_ptr<_Ty>(new _Elem[size]));
+        return {new _Elem[size]};
     }
 
     template <class _Ty, class = std::enable_if_t<std::extent_v<_Ty> != 0, int>>
