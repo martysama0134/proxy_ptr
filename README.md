@@ -9,7 +9,7 @@ e.g. `proxy_parent_base<std::tuple<int,int,char>>`
 It can generate a `proxy_ptr` (child) by using the `.proxy()` method.
 
 ### "proxy"
-A pointer which doesn't own it's pointed object. The proxy_ptr can be invalidated (setting it to point to nullptr) remotely by its parent (proxy_parent)
+A pointer which doesn't own its pointed object. The `proxy_ptr` can be invalidated remotely by its parent (`proxy_parent_base`) if set to `nullptr`.
 
 ### Warning
 These classes aren't thread-safe, You shouldn't use them for multithreading.
