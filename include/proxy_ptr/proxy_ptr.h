@@ -94,6 +94,7 @@ namespace proxy {
         proxy_ptr() {}
         proxy_ptr(const proxy_ptr& n) { _proxy_from(n); }
         proxy_ptr(_Ty* r) { _detach(new _common_Ptr_Ty(r)); }
+        proxy_ptr(std::nullptr_t) { _detach(); }
 
         operator bool() const { return (_is_Pointing() && _ppobj->get()); }
         explicit operator _Ty*() const { return get(); }
