@@ -174,9 +174,10 @@ namespace proxy {
     template <class _Ty> class proxy_parent_base {
        public:
         proxy_ptr<_Ty> proxy() { return {_proxyPtr}; }
-        void proxy_delete() { _proxyPtr->proxy_delete(); }
-        decltype(auto) proxy_release() { return _proxyPtr->proxy_release(); }
-
+        void proxy_delete() {
+            auto ret = _proxyPtr.proxy_release();
+            _proxyPtr = static_cast<_Ty*>(this);
+        }
         virtual ~proxy_parent_base() { auto ret = _proxyPtr.proxy_release(); }
 
        private:
