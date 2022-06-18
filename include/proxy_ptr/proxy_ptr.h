@@ -66,7 +66,8 @@ namespace proxy {
         };
 
         template <class Ty>
-        using extract_proxy_pointer_type = _extra_proxy_pointer_type<Ty>::type;
+        using extract_proxy_pointer_type =
+            typename _extra_proxy_pointer_type<Ty>::type;
 
         template <class Ty>
         using extract_proxy_type =
