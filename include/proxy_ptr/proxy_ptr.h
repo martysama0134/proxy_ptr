@@ -19,6 +19,7 @@
 #include <atomic>
 
 #define PROXY_PTR_NO_DISCARD [[nodiscard]]
+#define PROXY_PTR_UNUSED(v) ((void)v)
 
 namespace proxy {
     template <class Ty> class proxy_parent_base;  // forward declaration
@@ -179,7 +180,10 @@ namespace proxy {
             auto ret = _proxyPtr.proxy_release();
             _proxyPtr = static_cast<_Ty*>(this);
         }
-        virtual ~proxy_parent_base() { auto ret = _proxyPtr.proxy_release(); }
+        virtual ~proxy_parent_base() {
+            auto ret = _proxyPtr.proxy_release();
+            PROXY_PTR_UNUSED(ret);
+        }
 
        private:
         proxy_ptr<_Ty> _proxyPtr{static_cast<_Ty*>(this)};
