@@ -211,7 +211,7 @@ namespace proxy {
 
         template <class Ty> struct make_proxy<Ty[]> {
             static proxy_ptr<Ty[]> construct(size_t len) {
-                return {new Ty[len]};
+                return proxy_ptr<Ty[]>{new Ty[len]};
             }
         };
     }  // namespace detail
