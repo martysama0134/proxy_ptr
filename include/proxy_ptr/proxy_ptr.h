@@ -25,38 +25,44 @@ namespace proxy {
     template <class Ty> class proxy_parent_base;  // forward declaration
 
     namespace detail {
-        template <class _Ty, bool _IsArray> class common_ptr {
+        template <class _Ty, bool _IsArray> class _proxy_common_state {
            private:
-            _Ty* ptr = nullptr;
-            size_t ref_Count = 0;
+            _Ty* _ptr = nullptr;
+            size_t _ref_count = 0;
+            bool _alive = false;
 
            public:
-            common_ptr(_Ty* p) { ptr = p; }
-            void inc_ref() { ref_Count++; }
-            bool dec_ref() {
-                if (ref_Count == 0)
-                    return false;
-                return --ref_Count != 0;
+            _proxy_common_state(_Ty* p) {
+                _ptr = p;
+                _alive = true;
             }
-            _Ty* get() const { return ptr; }
+            void inc_ref() { _ref_count++; }
+            bool dec_ref() {
+                if (_ref_count == 0)
+                    return false;
+                return --_ref_count != 0;
+            }
+            _Ty* get() const { return _ptr; }
             _Ty* release() {
-                auto old = ptr;
-                ptr = nullptr;
-                return old;
+                _alive = false;
+                return _ptr;
             }
 
+            bool alive() const { return _alive; }
+
             void delete_ptr() {
-                if (ptr) {
+                if (_ptr && _alive) {
                     if constexpr (_IsArray)
-                        delete[] ptr;
+                        delete[] _ptr;
                     else if constexpr (!_IsArray) {
-                        delete ptr;
+                        delete _ptr;
                     }
-                    ptr = nullptr;
+
+                    _alive = false;
                 }
             }
 
-            ~common_ptr() { delete_ptr(); }
+            ~_proxy_common_state() { delete_ptr(); }
         };
 
         template <class Ty> struct _extra_proxy_pointer_type {
@@ -83,11 +89,12 @@ namespace proxy {
 
     template <class _RTy> class proxy_ptr {
         using _Ty = detail::extract_proxy_type<_RTy>;
-        using _common_Ptr_Ty = detail::common_ptr<_Ty, std::is_array_v<_RTy>>;
+        using _common_Ptr_Ty =
+            detail::_proxy_common_state<_Ty, std::is_array_v<_RTy>>;
 
        protected:
-        proxy_ptr(_common_Ptr_Ty* ptr) {
-            _ppobj = ptr;
+        proxy_ptr(_common_Ptr_Ty* _ptr) {
+            _ppobj = _ptr;
             if (_ppobj)
                 _ppobj->inc_ref();
         }
@@ -98,7 +105,7 @@ namespace proxy {
         proxy_ptr(_Ty* r) { _detach(new _common_Ptr_Ty(r)); }
         proxy_ptr(std::nullptr_t) { _detach(); }
 
-        operator bool() const { return (_is_Pointing() && _ppobj->get()); }
+        operator bool() const { return alive(); }
         explicit operator _Ty*() const { return get(); }
 
         _Ty* get() const {
@@ -118,14 +125,14 @@ namespace proxy {
 
         template <class _Ty2 = _Ty,
                   class = std::enable_if_t<std::is_array_v<_Ty2>>>
-        _Ty2* operator[](std::ptrdiff_t p) const {
+        _Ty2& operator[](std::ptrdiff_t p) const {
             assert(_is_Pointing());
             return (*get())[p];
         }
 
         template <class _Ty2 = _Ty,
                   class = std::enable_if_t<!std::is_array_v<_Ty2>>>
-        _Ty2* operator*() const {
+        _Ty2& operator*() const {
             assert(_is_Pointing());
             return *get();
         }
@@ -149,6 +156,10 @@ namespace proxy {
         void proxy_delete() {
             if (_is_Pointing())
                 _ppobj->delete_ptr();
+        }
+
+        bool alive() const {
+            return _is_Pointing() && _ppobj->alive() && _ppobj->get();
         }
 
         ~proxy_ptr() { _detach(); }
@@ -329,14 +340,14 @@ PROXY_PTR_NO_DISCARD bool operator<=(std::nullptr_t _Left,
 
 template <class _Ty>
 PROXY_PTR_NO_DISCARD bool operator==(const proxy::proxy_ptr<_Ty>& _Left,
-                                     const _Ty* const ptr) noexcept {
-    return _Left.get() == ptr;
+                                     const _Ty* const _ptr) noexcept {
+    return _Left.get() == _ptr;
 }
 
 template <class _Ty>
 PROXY_PTR_NO_DISCARD bool operator==(
-    const _Ty* ptr, const proxy::proxy_ptr<_Ty>& _Right) noexcept {
-    return _Right.get() == ptr;
+    const _Ty* _ptr, const proxy::proxy_ptr<_Ty>& _Right) noexcept {
+    return _Right.get() == _ptr;
 }
 
 template <class _Ty>
@@ -405,14 +416,14 @@ PROXY_PTR_NO_DISCARD bool operator<=(const _Ty* const _Left,
 
 template <class _Ty>
 PROXY_PTR_NO_DISCARD bool operator==(const proxy::proxy_ptr<_Ty>& _Left,
-                                     _Ty* const ptr) noexcept {
-    return _Left.get() == ptr;
+                                     _Ty* const _ptr) noexcept {
+    return _Left.get() == _ptr;
 }
 
 template <class _Ty>
 PROXY_PTR_NO_DISCARD bool operator==(
-    _Ty* const ptr, const proxy::proxy_ptr<_Ty>& _Right) noexcept {
-    return _Right.get() == ptr;
+    _Ty* const _ptr, const proxy::proxy_ptr<_Ty>& _Right) noexcept {
+    return _Right.get() == _ptr;
 }
 
 template <class _Ty>
@@ -478,7 +489,7 @@ PROXY_PTR_NO_DISCARD bool operator<=(_Ty* const _Left,
 }
 
 template <class Type> class std::hash<proxy::proxy_ptr<Type>> {
-    auto operator()(const proxy::proxy_ptr<Type> ptr) { return ptr.get(); }
+    auto operator()(const proxy::proxy_ptr<Type> _ptr) { return _ptr.get(); }
 };
 
 template <class Type> struct std::less<proxy::proxy_ptr<Type>> {
