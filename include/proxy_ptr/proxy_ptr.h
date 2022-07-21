@@ -102,8 +102,8 @@ namespace proxy {
        public:
         proxy_ptr() {}
         proxy_ptr(const proxy_ptr& n) { _proxy_from(n); }
-        proxy_ptr(_Ty* r) { _detach(new _common_Ptr_Ty(r)); }
         proxy_ptr(std::nullptr_t) { _detach(); }
+        explicit proxy_ptr(_Ty* r) { _detach(new _common_Ptr_Ty(r)); }
 
         operator bool() const { return alive(); }
         explicit operator _Ty*() const { return get(); }
@@ -175,6 +175,7 @@ namespace proxy {
             if (_ppobj)
                 if (!_ppobj->dec_ref())
                     delete (_ppobj);
+            
             _ppobj = n;
             if (_ppobj)
                 _ppobj->inc_ref();
@@ -238,8 +239,8 @@ PROXY_PTR_NO_DISCARD bool operator!=(const proxy::proxy_ptr<_Ty1>& _Left,
 template <class _Ty1, class _Ty2>
 PROXY_PTR_NO_DISCARD bool operator<(const proxy::proxy_ptr<_Ty1>& _Left,
                                     const proxy::proxy_ptr<_Ty2>& _Right) {
-    using _Ptr1 = typename proxy::proxy_ptr<_Ty1>::pointer;
-    using _Ptr2 = typename proxy::proxy_ptr<_Ty2>::pointer;
+    using _Ptr1 = _Ty1*;
+    using _Ptr2 = _Ty2*;
     using _Common = std::common_type_t<_Ptr1, _Ptr2>;
     return std::less<_Common>()(_Left.get(), _Right.get());
 }
