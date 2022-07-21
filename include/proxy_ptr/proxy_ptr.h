@@ -401,6 +401,82 @@ PROXY_PTR_NO_DISCARD bool operator<=(const _Ty* const _Left,
     return !(_Right < _Left);
 }
 
+//
+
+template <class _Ty>
+PROXY_PTR_NO_DISCARD bool operator==(const proxy::proxy_ptr<_Ty>& _Left,
+                                     _Ty* const ptr) noexcept {
+    return _Left.get() == ptr;
+}
+
+template <class _Ty>
+PROXY_PTR_NO_DISCARD bool operator==(
+    _Ty* const ptr, const proxy::proxy_ptr<_Ty>& _Right) noexcept {
+    return _Right.get() == ptr;
+}
+
+template <class _Ty>
+PROXY_PTR_NO_DISCARD bool operator!=(const proxy::proxy_ptr<_Ty>& _Left,
+                                     _Ty* const const _Right) noexcept {
+    return !(_Left == _Right);
+}
+
+template <class _Ty>
+PROXY_PTR_NO_DISCARD bool operator!=(
+    _Ty* const _Left, const proxy::proxy_ptr<_Ty>& _Right) noexcept {
+    return !(_Left == _Right);
+}
+
+template <class _Ty>
+PROXY_PTR_NO_DISCARD bool operator<(const proxy::proxy_ptr<_Ty>& _Left,
+                                    _Ty* const const _Right) {
+    using _Ptr = typename proxy::proxy_ptr<_Ty>::pointer;
+    return std::less<_Ptr>()(_Left.get(), _Right);
+}
+
+template <class _Ty>
+PROXY_PTR_NO_DISCARD bool operator<(_Ty* const _Left,
+                                    const proxy::proxy_ptr<_Ty>& _Right) {
+    using _Ptr = typename proxy::proxy_ptr<_Ty>::pointer;
+    return std::less<_Ptr>()(_Left, _Right.get());
+}
+
+template <class _Ty>
+PROXY_PTR_NO_DISCARD bool operator>=(const proxy::proxy_ptr<_Ty>& _Left,
+                                     _Ty* const _Right) {
+    return !(_Left < _Right);
+}
+
+template <class _Ty>
+PROXY_PTR_NO_DISCARD bool operator>=(_Ty* const _Left,
+                                     const proxy::proxy_ptr<_Ty>& _Right) {
+    return !(_Left < _Right);
+}
+
+template <class _Ty>
+PROXY_PTR_NO_DISCARD bool operator>(const proxy::proxy_ptr<_Ty>& _Left,
+                                    _Ty* const _Right) {
+    return _Right < _Left;
+}
+
+template <class _Ty>
+PROXY_PTR_NO_DISCARD bool operator>(_Ty* const _Left,
+                                    const proxy::proxy_ptr<_Ty>& _Right) {
+    return _Right < _Left;
+}
+
+template <class _Ty>
+PROXY_PTR_NO_DISCARD bool operator<=(const proxy::proxy_ptr<_Ty>& _Left,
+                                     _Ty* const _Right) {
+    return !(_Right < _Left);
+}
+
+template <class _Ty>
+PROXY_PTR_NO_DISCARD bool operator<=(_Ty* const _Left,
+                                     const proxy::proxy_ptr<_Ty>& _Right) {
+    return !(_Right < _Left);
+}
+
 template <class Type> class std::hash<proxy::proxy_ptr<Type>> {
     auto operator()(const proxy::proxy_ptr<Type> ptr) { return ptr.get(); }
 };
