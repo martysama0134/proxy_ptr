@@ -175,7 +175,7 @@ namespace proxy {
             if (_ppobj)
                 if (!_ppobj->dec_ref())
                     delete (_ppobj);
-            
+
             _ppobj = n;
             if (_ppobj)
                 _ppobj->inc_ref();
@@ -205,7 +205,7 @@ namespace proxy {
         template <class Ty> struct make_proxy {
             template <class... args>
             static proxy_ptr<Ty> construct(const args&... va) {
-                return {new Ty(va...)};
+                return proxy_ptr<Ty>{new Ty(va...)};
             }
         };
 
