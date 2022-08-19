@@ -108,34 +108,39 @@ namespace proxy {
         explicit operator bool() const { return alive(); }
         explicit operator _Ty*() const { return get(); }
 
-
         template <class _Ty2>
-        PROXY_PTR_NO_DISCARD bool operator==(const proxy::proxy_ptr<_Ty2>& _Right) const noexcept {
+        PROXY_PTR_NO_DISCARD bool operator==(
+            const proxy::proxy_ptr<_Ty2>& _Right) const noexcept {
             return get() == _Right.get();
         }
 
         template <class _Ty2>
-        PROXY_PTR_NO_DISCARD bool operator!=(const proxy::proxy_ptr<_Ty2>& _Right) const noexcept {
+        PROXY_PTR_NO_DISCARD bool operator!=(
+            const proxy::proxy_ptr<_Ty2>& _Right) const noexcept {
             return !(*this == _Right);
         }
 
         template <class _Ty2>
-        PROXY_PTR_NO_DISCARD bool operator<(const proxy::proxy_ptr<_Ty2>& _Right) const noexcept {
+        PROXY_PTR_NO_DISCARD bool operator<(
+            const proxy::proxy_ptr<_Ty2>& _Right) const noexcept {
             return get() < _Right.get();
         }
 
         template <class _Ty2>
-        PROXY_PTR_NO_DISCARD bool operator>=(const proxy::proxy_ptr<_Ty2>& _Right) const noexcept {
+        PROXY_PTR_NO_DISCARD bool operator>=(
+            const proxy::proxy_ptr<_Ty2>& _Right) const noexcept {
             return !(*this < _Right);
         }
 
         template <class _Ty2>
-        PROXY_PTR_NO_DISCARD bool operator>(const proxy::proxy_ptr<_Ty2>& _Right) const noexcept {
+        PROXY_PTR_NO_DISCARD bool operator>(
+            const proxy::proxy_ptr<_Ty2>& _Right) const noexcept {
             return _Right < *this;
         }
 
         template <class _Ty2>
-        PROXY_PTR_NO_DISCARD bool operator<=(const proxy::proxy_ptr<_Ty2>& _Right) const noexcept {
+        PROXY_PTR_NO_DISCARD bool operator<=(
+            const proxy::proxy_ptr<_Ty2>& _Right) const noexcept {
             return !(_Right < *this);
         }
 
@@ -255,7 +260,6 @@ namespace proxy {
 
 }  // namespace proxy
 
-
 template <class _Ty>
 PROXY_PTR_NO_DISCARD bool operator==(const proxy::proxy_ptr<_Ty>& _Left,
                                      std::nullptr_t) noexcept {
@@ -288,8 +292,8 @@ PROXY_PTR_NO_DISCARD bool operator<(const proxy::proxy_ptr<_Ty>& _Left,
 }
 
 template <class _Ty>
-PROXY_PTR_NO_DISCARD bool operator<(std::nullptr_t _Left,
-                                    const proxy::proxy_ptr<_Ty>& _Right) noexcept {
+PROXY_PTR_NO_DISCARD bool operator<(
+    std::nullptr_t _Left, const proxy::proxy_ptr<_Ty>& _Right) noexcept {
     using _Ptr = typename proxy::proxy_ptr<_Ty>::pointer;
     return std::less<_Ptr>()(_Left, _Right.get());
 }
@@ -422,7 +426,7 @@ PROXY_PTR_NO_DISCARD bool operator==(
 
 template <class _Ty>
 PROXY_PTR_NO_DISCARD bool operator!=(const proxy::proxy_ptr<_Ty>& _Left,
-                                     _Ty* const const _Right) noexcept {
+                                     _Ty* const _Right) noexcept {
     return !(_Left == _Right);
 }
 
@@ -434,7 +438,7 @@ PROXY_PTR_NO_DISCARD bool operator!=(
 
 template <class _Ty>
 PROXY_PTR_NO_DISCARD bool operator<(const proxy::proxy_ptr<_Ty>& _Left,
-                                    _Ty* const const _Right) {
+                                    _Ty* const _Right) {
     using _Ptr = typename proxy::proxy_ptr<_Ty>::pointer;
     return std::less<_Ptr>()(_Left.get(), _Right);
 }
