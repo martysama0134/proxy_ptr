@@ -105,8 +105,39 @@ namespace proxy {
         proxy_ptr(std::nullptr_t) { _detach(); }
         explicit proxy_ptr(_Ty* r) { _detach(new _common_Ptr_Ty(r)); }
 
-        operator bool() const { return alive(); }
+        explicit operator bool() const { return alive(); }
         explicit operator _Ty*() const { return get(); }
+
+
+        template <class _Ty2>
+        PROXY_PTR_NO_DISCARD bool operator==(const proxy::proxy_ptr<_Ty2>& _Right) const noexcept {
+            return get() == _Right.get();
+        }
+
+        template <class _Ty2>
+        PROXY_PTR_NO_DISCARD bool operator!=(const proxy::proxy_ptr<_Ty2>& _Right) const noexcept {
+            return !(*this == _Right);
+        }
+
+        template <class _Ty2>
+        PROXY_PTR_NO_DISCARD bool operator<(const proxy::proxy_ptr<_Ty2>& _Right) const noexcept {
+            return get() < _Right.get();
+        }
+
+        template <class _Ty2>
+        PROXY_PTR_NO_DISCARD bool operator>=(const proxy::proxy_ptr<_Ty2>& _Right) const noexcept {
+            return !(*this < _Right);
+        }
+
+        template <class _Ty2>
+        PROXY_PTR_NO_DISCARD bool operator>(const proxy::proxy_ptr<_Ty2>& _Right) const noexcept {
+            return _Right < *this;
+        }
+
+        template <class _Ty2>
+        PROXY_PTR_NO_DISCARD bool operator<=(const proxy::proxy_ptr<_Ty2>& _Right) const noexcept {
+            return !(_Right < *this);
+        }
 
         _Ty* get() const {
             if (!_is_Pointing())
@@ -224,44 +255,6 @@ namespace proxy {
 
 }  // namespace proxy
 
-template <class _Ty1, class _Ty2>
-PROXY_PTR_NO_DISCARD bool operator==(const proxy::proxy_ptr<_Ty1>& _Left,
-                                     const proxy::proxy_ptr<_Ty2>& _Right) {
-    return _Left.get() == _Right.get();
-}
-
-template <class _Ty1, class _Ty2>
-PROXY_PTR_NO_DISCARD bool operator!=(const proxy::proxy_ptr<_Ty1>& _Left,
-                                     const proxy::proxy_ptr<_Ty2>& _Right) {
-    return !(_Left == _Right);
-}
-
-template <class _Ty1, class _Ty2>
-PROXY_PTR_NO_DISCARD bool operator<(const proxy::proxy_ptr<_Ty1>& _Left,
-                                    const proxy::proxy_ptr<_Ty2>& _Right) {
-    using _Ptr1 = _Ty1*;
-    using _Ptr2 = _Ty2*;
-    using _Common = std::common_type_t<_Ptr1, _Ptr2>;
-    return std::less<_Common>()(_Left.get(), _Right.get());
-}
-
-template <class _Ty1, class _Ty2>
-PROXY_PTR_NO_DISCARD bool operator>=(const proxy::proxy_ptr<_Ty1>& _Left,
-                                     const proxy::proxy_ptr<_Ty2>& _Right) {
-    return !(_Left < _Right);
-}
-
-template <class _Ty1, class _Ty2>
-PROXY_PTR_NO_DISCARD bool operator>(const proxy::proxy_ptr<_Ty1>& _Left,
-                                    const proxy::proxy_ptr<_Ty2>& _Right) {
-    return _Right < _Left;
-}
-
-template <class _Ty1, class _Ty2>
-PROXY_PTR_NO_DISCARD bool operator<=(const proxy::proxy_ptr<_Ty1>& _Left,
-                                     const proxy::proxy_ptr<_Ty2>& _Right) {
-    return !(_Right < _Left);
-}
 
 template <class _Ty>
 PROXY_PTR_NO_DISCARD bool operator==(const proxy::proxy_ptr<_Ty>& _Left,
@@ -289,21 +282,21 @@ PROXY_PTR_NO_DISCARD bool operator!=(
 
 template <class _Ty>
 PROXY_PTR_NO_DISCARD bool operator<(const proxy::proxy_ptr<_Ty>& _Left,
-                                    std::nullptr_t _Right) {
+                                    std::nullptr_t _Right) noexcept {
     using _Ptr = typename proxy::proxy_ptr<_Ty>::pointer;
     return std::less<_Ptr>()(_Left.get(), _Right);
 }
 
 template <class _Ty>
 PROXY_PTR_NO_DISCARD bool operator<(std::nullptr_t _Left,
-                                    const proxy::proxy_ptr<_Ty>& _Right) {
+                                    const proxy::proxy_ptr<_Ty>& _Right) noexcept {
     using _Ptr = typename proxy::proxy_ptr<_Ty>::pointer;
     return std::less<_Ptr>()(_Left, _Right.get());
 }
 
 template <class _Ty>
 PROXY_PTR_NO_DISCARD bool operator>=(const proxy::proxy_ptr<_Ty>& _Left,
-                                     std::nullptr_t _Right) {
+                                     std::nullptr_t _Right) noexcept {
     return !(_Left < _Right);
 }
 
