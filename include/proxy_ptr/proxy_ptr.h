@@ -20,6 +20,15 @@
 
 #define PROXY_PTR_NO_DISCARD [[nodiscard]]
 #define PROXY_PTR_UNUSED(v) ((void)v)
+#if __cplusplus >= 201703L
+#define PROXY_PTR_IS_ARRAY(type) std::is_array_v<type>
+#define PROXY_PTR_EXTENT(type) std::extent_v<type>
+#define PROXY_PTR_IF_CONSTEXPR(expr) if constexpr (expr)
+#else
+#define PROXY_PTR_IS_ARRAY(type) std::is_array<type>::value
+#define PROXY_PTR_EXTENT(type) std::extent<type>::value
+#define PROXY_PTR_IF_CONSTEXPR(expr) if (expr)
+#endif
 
 namespace proxy {
     template <class Ty> class proxy_parent_base;  // forward declaration
@@ -52,9 +61,9 @@ namespace proxy {
 
             void delete_ptr() {
                 if (_ptr && _alive) {
-                    if constexpr (_IsArray)
+                    PROXY_PTR_IF_CONSTEXPR (_IsArray)
                         delete[] _ptr;
-                    else if constexpr (!_IsArray) {
+                    else PROXY_PTR_IF_CONSTEXPR (!_IsArray) {
                         delete _ptr;
                     }
 
@@ -82,15 +91,15 @@ namespace proxy {
 
         template <class Ty>
         constexpr bool is_proxy_valid_type =
-            !std::is_array_v<Ty> ||
-            (std::is_array_v<Ty> && std::extent_v<Ty> == 0);
+            !PROXY_PTR_IS_ARRAY(Ty) ||
+            (PROXY_PTR_IS_ARRAY(Ty) && PROXY_PTR_EXTENT(Ty) == 0);
 
     }  // namespace detail
 
     template <class _RTy> class proxy_ptr {
         using _Ty = detail::extract_proxy_type<_RTy>;
         using _common_Ptr_Ty =
-            detail::_proxy_common_state<_Ty, std::is_array_v<_RTy>>;
+            detail::_proxy_common_state<_Ty, PROXY_PTR_IS_ARRAY(_RTy)>;
 
        protected:
         proxy_ptr(_common_Ptr_Ty* _ptr) {
@@ -153,21 +162,21 @@ namespace proxy {
         _Ty* ptr() const { return get(); }
 
         template <class _Ty2 = _Ty,
-                  class = std::enable_if_t<!std::is_array_v<_Ty2>>>
+                  class = std::enable_if_t<!PROXY_PTR_IS_ARRAY(_Ty2)>>
         _Ty2* operator->() const {
             assert(_is_Pointing());
             return get();
         }
 
         template <class _Ty2 = _Ty,
-                  class = std::enable_if_t<std::is_array_v<_Ty2>>>
+                  class = std::enable_if_t<PROXY_PTR_IS_ARRAY(_Ty2)>>
         _Ty2& operator[](std::ptrdiff_t p) const {
             assert(_is_Pointing());
             return (*get())[p];
         }
 
         template <class _Ty2 = _Ty,
-                  class = std::enable_if_t<!std::is_array_v<_Ty2>>>
+                  class = std::enable_if_t<!PROXY_PTR_IS_ARRAY(_Ty2)>>
         _Ty2& operator*() const {
             assert(_is_Pointing());
             return *get();
