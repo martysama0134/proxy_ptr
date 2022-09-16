@@ -495,9 +495,9 @@ PROXY_PTR_NO_DISCARD bool operator<=(_Ty* const _Left,
     return !(_Right < _Left);
 }
 
-template <class Type> class std::hash<proxy::proxy_ptr<Type>> {
-    auto operator()(const proxy::proxy_ptr<Type> _ptr) const {
-        return _ptr.get();
+template <class Type> struct std::hash<proxy::proxy_ptr<Type>> {
+    size_t operator()(const proxy::proxy_ptr<Type> _ptr) const {
+        return reinterpret_cast<std::uintptr_t>(_ptr.get());
     }
 };
 
