@@ -21,13 +21,13 @@
 #define PROXY_PTR_NO_DISCARD [[nodiscard]]
 #define PROXY_PTR_UNUSED(v) ((void)v)
 #if __cplusplus >= 201703L
-#define PROXY_PTR_IS_ARRAY(type) std::is_array_v<type>
-#define PROXY_PTR_EXTENT(type) std::extent_v<type>
-#define PROXY_PTR_IF_CONSTEXPR(expr) if constexpr (expr)
+    #define PROXY_PTR_IS_ARRAY(type) std::is_array_v<type>
+    #define PROXY_PTR_EXTENT(type) std::extent_v<type>
+    #define PROXY_PTR_IF_CONSTEXPR(expr) if constexpr (expr)
 #else
-#define PROXY_PTR_IS_ARRAY(type) std::is_array<type>::value
-#define PROXY_PTR_EXTENT(type) std::extent<type>::value
-#define PROXY_PTR_IF_CONSTEXPR(expr) if (expr)
+    #define PROXY_PTR_IS_ARRAY(type) std::is_array<type>::value
+    #define PROXY_PTR_EXTENT(type) std::extent<type>::value
+    #define PROXY_PTR_IF_CONSTEXPR(expr) if (expr)
 #endif
 
 namespace proxy {
@@ -61,9 +61,9 @@ namespace proxy {
 
             void delete_ptr() {
                 if (_ptr && _alive) {
-                    PROXY_PTR_IF_CONSTEXPR (_IsArray)
-                        delete[] _ptr;
-                    else PROXY_PTR_IF_CONSTEXPR (!_IsArray) {
+                    PROXY_PTR_IF_CONSTEXPR(_IsArray)
+                    delete[] _ptr;
+                    else PROXY_PTR_IF_CONSTEXPR(!_IsArray) {
                         delete _ptr;
                     }
 
@@ -496,7 +496,9 @@ PROXY_PTR_NO_DISCARD bool operator<=(_Ty* const _Left,
 }
 
 template <class Type> class std::hash<proxy::proxy_ptr<Type>> {
-    auto operator()(const proxy::proxy_ptr<Type> _ptr) { return _ptr.get(); }
+    auto operator()(const proxy::proxy_ptr<Type> _ptr) const {
+        return _ptr.get();
+    }
 };
 
 template <class Type> struct std::less<proxy::proxy_ptr<Type>> {
