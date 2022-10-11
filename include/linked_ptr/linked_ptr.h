@@ -13,6 +13,9 @@
 // THE SOFTWARE.
 //
 ///////////////////////////////////////////////////////////////////////////////
+#ifndef __LINKED_LINKED_PTR_H__
+#define __LINKED_LINKED_PTR_H__
+#pragma once
 
 #include <type_traits>
 #include <functional>
@@ -453,3 +456,5 @@ template <class Type> struct std::less<linked::linked_ptr<Type>> {
         return lhs < rhs;
     }
 };
+
+#endif
