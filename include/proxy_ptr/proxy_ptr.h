@@ -13,6 +13,9 @@
 // THE SOFTWARE.
 //
 ///////////////////////////////////////////////////////////////////////////////
+#ifndef __PROXY_PROXY_PTR_H__
+#define __PROXY_PROXY_PTR_H__
+#pragma once
 
 #include <type_traits>
 #include <assert.h>
@@ -507,3 +510,5 @@ template <class Type> struct std::less<proxy::proxy_ptr<Type>> {
         return lhs < rhs;
     }
 };
+
+#endif
