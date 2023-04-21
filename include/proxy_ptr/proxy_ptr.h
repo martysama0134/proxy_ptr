@@ -26,11 +26,11 @@
 #if __cplusplus >= 201703L
     #define PROXY_PTR_IS_ARRAY(type) std::is_array_v<type>
     #define PROXY_PTR_EXTENT(type) std::extent_v<type>
-    #define PROXY_PTR_IF_CONSTEXPR(expr) if constexpr (expr)
+    #define PROXY_PTR_CONSTEXPR(expr) constexpr(expr)
 #else
     #define PROXY_PTR_IS_ARRAY(type) std::is_array<type>::value
     #define PROXY_PTR_EXTENT(type) std::extent<type>::value
-    #define PROXY_PTR_IF_CONSTEXPR(expr) if (expr)
+    #define PROXY_PTR_CONSTEXPR(expr) (expr)
 #endif
 
 namespace proxy {
@@ -48,12 +48,14 @@ namespace proxy {
                 _ptr = p;
                 _alive = true;
             }
+
             void inc_ref() { _ref_count++; }
             bool dec_ref() {
                 if (_ref_count == 0)
                     return false;
                 return --_ref_count != 0;
             }
+
             _Ty* get() const { return _ptr; }
             _Ty* release() {
                 _alive = false;
@@ -64,12 +66,11 @@ namespace proxy {
 
             void delete_ptr() {
                 if (_ptr && _alive) {
-                    PROXY_PTR_IF_CONSTEXPR(_IsArray)
-                    delete[] _ptr;
-                    else PROXY_PTR_IF_CONSTEXPR(!_IsArray) {
+                    if PROXY_PTR_CONSTEXPR (_IsArray) {
+                        delete[] _ptr;
+                    } else {
                         delete _ptr;
                     }
-
                     _alive = false;
                 }
             }
@@ -77,16 +78,16 @@ namespace proxy {
             ~_proxy_common_state() { delete_ptr(); }
         };
 
-        template <class Ty> struct _extra_proxy_pointer_type {
+        template <class Ty> struct _extract_proxy_pointer_type {
             using type = Ty*;
         };
-        template <class Ty> struct _extra_proxy_pointer_type<Ty[]> {
+        template <class Ty> struct _extract_proxy_pointer_type<Ty[]> {
             using type = Ty*;
         };
 
         template <class Ty>
         using extract_proxy_pointer_type =
-            typename _extra_proxy_pointer_type<Ty>::type;
+            typename _extract_proxy_pointer_type<Ty>::type;
 
         template <class Ty>
         using extract_proxy_type =
