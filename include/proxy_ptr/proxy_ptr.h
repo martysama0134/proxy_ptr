@@ -13,40 +13,44 @@
 // THE SOFTWARE.
 //
 ///////////////////////////////////////////////////////////////////////////////
-#ifndef __PROXY_PROXY_PTR_H__
-#define __PROXY_PROXY_PTR_H__
 #pragma once
+#ifndef __PROXY_PROXY_PTR_H__
+    #define __PROXY_PROXY_PTR_H__
 
-#include <type_traits>
-#include <assert.h>
-#include <atomic>
+    #include <type_traits>
+    #include <assert.h>
+    #include <atomic>
+    #include <memory>
 
-#define PROXY_PTR_NO_DISCARD [[nodiscard]]
-#define PROXY_PTR_UNUSED(v) ((void)v)
-#if __cplusplus >= 201703L
-    #define PROXY_PTR_IS_ARRAY(type) std::is_array_v<type>
-    #define PROXY_PTR_EXTENT(type) std::extent_v<type>
-    #define PROXY_PTR_CONSTEXPR(expr) constexpr(expr)
-#else
-    #define PROXY_PTR_IS_ARRAY(type) std::is_array<type>::value
-    #define PROXY_PTR_EXTENT(type) std::extent<type>::value
-    #define PROXY_PTR_CONSTEXPR(expr) (expr)
-#endif
+    #define PROXY_PTR_NO_DISCARD [[nodiscard]]
+    #define PROXY_PTR_UNUSED(v) ((void)v)
+    #if __cplusplus >= 201703L
+        #define PROXY_PTR_IS_ARRAY(type) std::is_array_v<type>
+        #define PROXY_PTR_EXTENT(type) std::extent_v<type>
+        #define PROXY_PTR_CONSTEXPR(expr) constexpr(expr)
+    #else
+        #define PROXY_PTR_IS_ARRAY(type) std::is_array<type>::value
+        #define PROXY_PTR_EXTENT(type) std::extent<type>::value
+        #define PROXY_PTR_CONSTEXPR(expr) (expr)
+    #endif
 
 namespace proxy {
     template <class Ty> class proxy_parent_base;  // forward declaration
 
     namespace detail {
-        template <class _Ty, bool _IsArray> class _proxy_common_state {
+        template <class _Ty, class _Dx> class _proxy_common_state {
            private:
             _Ty* _ptr = nullptr;
             size_t _ref_count = 0;
             bool _alive = false;
+            _Dx _dx;
 
            public:
-            _proxy_common_state(_Ty* p) {
-                _ptr = p;
+            _proxy_common_state(_Ty* p) : _ptr(p) { _alive = true; }
+
+            _proxy_common_state(_Ty* p, const _Dx& dx) : _ptr(p) {
                 _alive = true;
+                _dx = dx;
             }
 
             void inc_ref() { _ref_count++; }
@@ -66,11 +70,7 @@ namespace proxy {
 
             void delete_ptr() {
                 if (_ptr && _alive) {
-                    if PROXY_PTR_CONSTEXPR (_IsArray) {
-                        delete[] _ptr;
-                    } else {
-                        delete _ptr;
-                    }
+                    _dx(_ptr);
                     _alive = false;
                 }
             }
@@ -100,10 +100,10 @@ namespace proxy {
 
     }  // namespace detail
 
-    template <class _RTy> class proxy_ptr {
+    template <class _RTy, class _Dx = std::default_delete<_RTy>>
+    class proxy_ptr {
         using _Ty = detail::extract_proxy_type<_RTy>;
-        using _common_Ptr_Ty =
-            detail::_proxy_common_state<_Ty, PROXY_PTR_IS_ARRAY(_RTy)>;
+        using _common_Ptr_Ty = detail::_proxy_common_state<_Ty, _Dx>;
 
        protected:
         proxy_ptr(_common_Ptr_Ty* _ptr) {
@@ -117,6 +117,9 @@ namespace proxy {
         proxy_ptr(const proxy_ptr& n) { _proxy_from(n); }
         proxy_ptr(std::nullptr_t) { _detach(); }
         explicit proxy_ptr(_Ty* r) { _detach(new _common_Ptr_Ty(r)); }
+        explicit proxy_ptr(_Ty* r, const _Dx& dx) {
+            _detach(new _common_Ptr_Ty(r, dx));
+        }
 
         explicit operator bool() const { return alive(); }
         explicit operator _Ty*() const { return get(); }

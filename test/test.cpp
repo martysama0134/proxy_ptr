@@ -1,10 +1,14 @@
-#include "../include/linked_ptr/linked_ptr.h"
 #include "../include/proxy_ptr/proxy_ptr.h"
 #include <iostream>
-#include <memory>
 #include <chrono>
 #include <array>
 #include <thread>
+
+#ifdef _DEBUG
+    #define TIMES 100
+#else
+    #define TIMES 1000
+#endif
 
 double get_time() {
     return std::chrono::duration<double>(
@@ -12,49 +16,37 @@ double get_time() {
         .count();
 }
 
+template <class Func>
+void execute_print_time(const std::string& name, int times, Func f) {
+    auto start = get_time();
+    // executing
+    for (int i = 0; i < times; i++)
+        f();
+
+    // getting execution time
+    auto end = get_time();
+    auto time = end - start;
+    std::cout << name << ": finish in " << time << std::endl;
+}
+
 int main() {
-    {
-        auto start = get_time();
-        auto root = linked::make_linked<char[]>(1000);
-        for (int j = 0; j < 1; j++) {
-            for (int i = 0; i < 100000000; i++) {
-                linked::linked_ptr<char[]> ptr = root;
-            }
-        }
+    execute_print_time("shared >> huge copy", TIMES, []() {
+        auto root = std::make_shared<char[]>(100000);
+        for (int i = 0; i < 100000; i++)
+            if (auto copy = root)
+                if (copy.get() != root.get())
+                    std::cout << "what the hell\n";
+        return root.get();
+    });
 
-        auto end = get_time();
-        auto time = end - start;
-
-        std::cout << "t1 : finish in " << time << std::endl;
-    }
-
-    {
-        auto start = get_time();
-        auto root = std::make_shared<char[]>(1000);
-        for (int j = 0; j < 1; j++) {
-            for (int i = 0; i < 100000000; i++) {
-                std::shared_ptr<char[]> ptr = root;
-            }
-        }
-
-        auto end = get_time();
-        auto time = end - start;
-        std::cout << "t2 : finish in " << time << std::endl;
-    }
-
-    {
-        auto start = get_time();
-        auto root = proxy::make_proxy<char[]>(1000);
-        for (int j = 0; j < 1; j++) {
-            for (int i = 0; i < 100000000; i++) {
-                proxy::proxy_ptr<char[]> ptr1 = root;
-            }
-        }
-
-        auto end = get_time();
-        auto time = end - start;
-        std::cout << "t3 : finish in " << time << std::endl;
-    }
+    execute_print_time("proxy >> huge copy", TIMES, []() {
+        auto root = proxy::make_proxy<char[]>(100000);
+        for (int i = 0; i < 100000; i++)
+            if (auto copy = root)
+                if (copy.get() != root.get())
+                    std::cout << "what the hell\n";
+        return root.get();
+    });
 
     std::string s;
     std::cin >> s;
