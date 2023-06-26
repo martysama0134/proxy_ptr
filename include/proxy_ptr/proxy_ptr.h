@@ -114,6 +114,11 @@ namespace proxy {
             !PROXY_PTR_IS_ARRAY(Ty) ||
             (PROXY_PTR_IS_ARRAY(Ty) && PROXY_PTR_EXTENT(Ty) == 0);
 
+        template <class _Ty, class _Dx>
+        constexpr bool is_valid_deleter =
+            std::is_move_constructible_v<_Dx> &&
+            detail::_can_call_function_object<_Dx&, _Ty*&>::value;
+
     }  // namespace detail
 
     template <class _RTy> class proxy_ptr {
@@ -137,10 +142,7 @@ namespace proxy {
             _detach(new common_ptr_type(r));
         }
         template <class _Dx,
-                  std::enable_if_t<
-                      std::is_move_constructible_v<_Dx> &&
-                          detail::_can_call_function_object<_Dx&, _Ty*&>::value,
-                      int> = 0>
+                  std::enable_if_t<detail::is_valid_deleter<_Ty, _Dx>, int> = 0>
         explicit proxy_ptr(_Ty* r, const _Dx& dx) {
             using common_ptr_type = detail::_proxy_common_state<_Ty, _Dx>;
             _detach(new common_ptr_type(r, dx));
