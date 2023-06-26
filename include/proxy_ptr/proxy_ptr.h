@@ -35,6 +35,9 @@
     #endif
 
 namespace proxy {
+    struct proxy_atomic {};
+    struct proxy_non_atomic {};
+
     // forward declaration
     template <class Ty> class proxy_parent_base;
 
@@ -47,10 +50,22 @@ namespace proxy {
             std::void_t<decltype(std::declval<_Fx>()(std::declval<_Arg>()))>>
             : std::true_type {};
 
-        template <class _Ty> class _proxy_common_state_base {
+        template <class Ty> struct _deduce_ref_count_type;
+        template <> struct _deduce_ref_count_type<proxy_atomic> {
+            using type = std::atomic<size_t>;
+        };
+        template <> struct _deduce_ref_count_type<proxy_non_atomic> {
+            using type = size_t;
+        };
+
+        template <class Ty>
+        using deduce_ref_count_type = _deduce_ref_count_type<Ty>::type;
+
+        template <class _Ty, class _Atomic> class _proxy_common_state_base {
            protected:
+            using ref_count_t = deduce_ref_count_type<_Atomic>;
             _Ty* _ptr = nullptr;
-            size_t _ref_count = 0;
+            ref_count_t _ref_count = static_cast<size_t>(0);
             bool _alive = false;
 
            public:
@@ -70,28 +85,28 @@ namespace proxy {
                 return _ptr;
             }
 
-            virtual void delete_ptr(){};
-            virtual ~_proxy_common_state_base() { delete_ptr(); }
+            virtual ~_proxy_common_state_base() {}
         };
 
-        template <class _Ty, class _Dx>
-        class _proxy_common_state : private _Dx,
-                                    public _proxy_common_state_base<_Ty> {
+        template <class _Ty, class _Dx, class _Atomic>
+        class _proxy_common_state
+            : private _Dx,
+              public _proxy_common_state_base<_Ty, _Atomic> {
            public:
             _proxy_common_state(_Ty* ptr)
-                : _proxy_common_state_base<_Ty>(ptr) {}
+                : _proxy_common_state_base<_Ty, _Atomic>(ptr) {}
             _proxy_common_state(_Ty* ptr, const _Dx& dx)
-                : _proxy_common_state_base<_Ty>(ptr) {
+                : _proxy_common_state_base<_Ty, _Atomic>(ptr) {
                 static_cast<_Dx&>(*this) = dx;
             }
 
-            void delete_ptr() override {
+            void delete_ptr() {
                 if (this->_ptr && this->_alive) {
                     static_cast<_Dx&>(*this)(this->_ptr);
                     this->_alive = false;
                 }
             }
-            ~_proxy_common_state() {}
+            virtual ~_proxy_common_state() { delete_ptr(); }
         };
 
         template <class Ty> struct _extract_proxy_pointer_type {
@@ -119,11 +134,22 @@ namespace proxy {
             std::is_move_constructible_v<_Dx> &&
             detail::_can_call_function_object<_Dx&, _Ty*&>::value;
 
+        template <class Ty>
+        constexpr bool is_valid_atomic_flag =
+            std::is_same_v<Ty, proxy_atomic> ||
+            std::is_same_v<Ty, proxy_non_atomic>;
+
+        template <class Ty>
+        using enable_valid_atomic_flag =
+            std::enable_if_t<is_valid_atomic_flag<Ty>>;
     }  // namespace detail
 
-    template <class _RTy> class proxy_ptr {
+    template <class _RTy, class _AtomicFlag = proxy_non_atomic,
+              class = detail::enable_valid_atomic_flag<_AtomicFlag>>
+    class proxy_ptr {
         using _Ty = detail::extract_proxy_type<_RTy>;
-        using _common_Ptr_Ty = detail::_proxy_common_state_base<_Ty>;
+        using _common_Ptr_Ty =
+            detail::_proxy_common_state_base<_Ty, _AtomicFlag>;
 
        protected:
         proxy_ptr(_common_Ptr_Ty* _ptr) {
@@ -137,14 +163,16 @@ namespace proxy {
         proxy_ptr(std::nullptr_t) {}
         proxy_ptr(const proxy_ptr& n) { _proxy_from(n); }
         explicit proxy_ptr(_Ty* r) {
+            using deleter_type = std::default_delete<_Ty>;
             using common_ptr_type =
-                detail::_proxy_common_state<_Ty, std::default_delete<_Ty>>;
+                detail::_proxy_common_state<_Ty, deleter_type, _AtomicFlag>;
             _detach(new common_ptr_type(r));
         }
         template <class _Dx,
                   std::enable_if_t<detail::is_valid_deleter<_Ty, _Dx>, int> = 0>
         explicit proxy_ptr(_Ty* r, const _Dx& dx) {
-            using common_ptr_type = detail::_proxy_common_state<_Ty, _Dx>;
+            using common_ptr_type =
+                detail::_proxy_common_state<_Ty, _Dx, _AtomicFlag>;
             _detach(new common_ptr_type(r, dx));
         }
 
@@ -281,16 +309,16 @@ namespace proxy {
     };
 
     namespace detail {
-        template <class Ty> struct make_proxy {
+        template <class Ty, class Atomic> struct make_proxy {
             template <class... args>
-            static proxy_ptr<Ty> construct(const args&... va) {
-                return proxy_ptr<Ty>{new Ty(va...)};
+            static proxy_ptr<Ty, Atomic> construct(const args&... va) {
+                return proxy_ptr<Ty, Atomic>{new Ty(va...)};
             }
         };
 
-        template <class Ty> struct make_proxy<Ty[]> {
-            static proxy_ptr<Ty[]> construct(size_t len) {
-                return proxy_ptr<Ty[]>{new Ty[len]};
+        template <class Ty, class Atomic> struct make_proxy<Ty[], Atomic> {
+            static proxy_ptr<Ty[], Atomic> construct(size_t len) {
+                return proxy_ptr<Ty[], Atomic>{new Ty[len]};
             }
         };
     }  // namespace detail
@@ -298,7 +326,15 @@ namespace proxy {
     template <class Ty, class... Args>
     std::enable_if_t<detail::is_proxy_valid_type<Ty>, proxy_ptr<Ty>> make_proxy(
         const Args&... Arguments) {
-        return detail::make_proxy<Ty>::construct(Arguments...);
+        return detail::make_proxy<Ty, proxy_non_atomic>::construct(
+            Arguments...);
+    }
+
+    template <class Ty, class... Args>
+    std::enable_if_t<detail::is_proxy_valid_type<Ty>,
+                     proxy_ptr<Ty, proxy_atomic>>
+    make_proxy_atomic(const Args&... Arguments) {
+        return detail::make_proxy<Ty, proxy_atomic>::construct(Arguments...);
     }
 
 }  // namespace proxy

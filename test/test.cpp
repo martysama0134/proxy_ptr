@@ -1,8 +1,8 @@
-#include "../include/proxy_ptr/proxy_ptr.h"
 #include <iostream>
 #include <chrono>
 #include <array>
 #include <thread>
+#include "../include/proxy_ptr/proxy_ptr.h"
 
 #ifdef _DEBUG
     #define TIMES 2000
@@ -41,6 +41,15 @@ int main() {
 
     execute_print_time("proxy >> huge copy", TIMES, []() {
         auto root = proxy::make_proxy<char[]>(100000);
+        for (int i = 0; i < 100000; i++)
+            if (auto copy = root)
+                if (copy.get() != root.get())
+                    std::cout << "what the hell\n";
+        return root.get();
+    });
+
+    execute_print_time("proxy atomic >> huge copy", TIMES, []() {
+        auto root = proxy::make_proxy_atomic<char[]>(100000);
         for (int i = 0; i < 100000; i++)
             if (auto copy = root)
                 if (copy.get() != root.get())
