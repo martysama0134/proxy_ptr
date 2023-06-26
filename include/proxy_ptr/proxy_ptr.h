@@ -35,23 +35,26 @@
     #endif
 
 namespace proxy {
-    template <class Ty> class proxy_parent_base;  // forward declaration
+    // forward declaration
+    template <class Ty> class proxy_parent_base;
 
     namespace detail {
-        template <class _Ty, class _Dx> class _proxy_common_state {
-           private:
+        template <class _Fx, class _Arg, class = void>
+        struct _can_call_function_object : std::false_type {};
+        template <class _Fx, class _Arg>
+        struct _can_call_function_object<
+            _Fx, _Arg,
+            std::void_t<decltype(std::declval<_Fx>()(std::declval<_Arg>()))>>
+            : std::true_type {};
+
+        template <class _Ty> class _proxy_common_state_base {
+           protected:
             _Ty* _ptr = nullptr;
             size_t _ref_count = 0;
             bool _alive = false;
-            _Dx _dx;
 
            public:
-            _proxy_common_state(_Ty* p) : _ptr(p) { _alive = true; }
-
-            _proxy_common_state(_Ty* p, const _Dx& dx) : _ptr(p) {
-                _alive = true;
-                _dx = dx;
-            }
+            _proxy_common_state_base(_Ty* p) : _ptr(p) { _alive = true; }
 
             void inc_ref() { _ref_count++; }
             bool dec_ref() {
@@ -60,22 +63,35 @@ namespace proxy {
                 return --_ref_count != 0;
             }
 
+            bool alive() const { return _alive; }
             _Ty* get() const { return _ptr; }
             _Ty* release() {
                 _alive = false;
                 return _ptr;
             }
 
-            bool alive() const { return _alive; }
+            virtual void delete_ptr(){};
+            virtual ~_proxy_common_state_base() { delete_ptr(); }
+        };
 
-            void delete_ptr() {
-                if (_ptr && _alive) {
-                    _dx(_ptr);
-                    _alive = false;
-                }
+        template <class _Ty, class _Dx>
+        class _proxy_common_state : private _Dx,
+                                    public _proxy_common_state_base<_Ty> {
+           public:
+            _proxy_common_state(_Ty* ptr)
+                : _proxy_common_state_base<_Ty>(ptr) {}
+            _proxy_common_state(_Ty* ptr, const _Dx& dx)
+                : _proxy_common_state_base<_Ty>(ptr) {
+                static_cast<_Dx&>(*this) = dx;
             }
 
-            ~_proxy_common_state() { delete_ptr(); }
+            void delete_ptr() override {
+                if (this->_ptr && this->_alive) {
+                    static_cast<_Dx&>(*this)(this->_ptr);
+                    this->_alive = false;
+                }
+            }
+            ~_proxy_common_state() {}
         };
 
         template <class Ty> struct _extract_proxy_pointer_type {
@@ -100,10 +116,9 @@ namespace proxy {
 
     }  // namespace detail
 
-    template <class _RTy, class _Dx = std::default_delete<_RTy>>
-    class proxy_ptr {
+    template <class _RTy> class proxy_ptr {
         using _Ty = detail::extract_proxy_type<_RTy>;
-        using _common_Ptr_Ty = detail::_proxy_common_state<_Ty, _Dx>;
+        using _common_Ptr_Ty = detail::_proxy_common_state_base<_Ty>;
 
        protected:
         proxy_ptr(_common_Ptr_Ty* _ptr) {
@@ -114,11 +129,21 @@ namespace proxy {
 
        public:
         proxy_ptr() {}
+        proxy_ptr(std::nullptr_t) {}
         proxy_ptr(const proxy_ptr& n) { _proxy_from(n); }
-        proxy_ptr(std::nullptr_t) { _detach(); }
-        explicit proxy_ptr(_Ty* r) { _detach(new _common_Ptr_Ty(r)); }
+        explicit proxy_ptr(_Ty* r) {
+            using common_ptr_type =
+                detail::_proxy_common_state<_Ty, std::default_delete<_Ty>>;
+            _detach(new common_ptr_type(r));
+        }
+        template <class _Dx,
+                  std::enable_if_t<
+                      std::is_move_constructible_v<_Dx> &&
+                          detail::_can_call_function_object<_Dx&, _Ty*&>::value,
+                      int> = 0>
         explicit proxy_ptr(_Ty* r, const _Dx& dx) {
-            _detach(new _common_Ptr_Ty(r, dx));
+            using common_ptr_type = detail::_proxy_common_state<_Ty, _Dx>;
+            _detach(new common_ptr_type(r, dx));
         }
 
         explicit operator bool() const { return alive(); }

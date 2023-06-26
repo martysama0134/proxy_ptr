@@ -5,9 +5,9 @@
 #include <thread>
 
 #ifdef _DEBUG
-    #define TIMES 100
+    #define TIMES 2000
 #else
-    #define TIMES 1000
+    #define TIMES 20000
 #endif
 
 double get_time() {
@@ -48,6 +48,7 @@ int main() {
         return root.get();
     });
 
+    std::cout << "test completed." << std::endl;
     std::string s;
     std::cin >> s;
     return 0;
