@@ -1,8 +1,8 @@
+#include "../include/proxy_ptr/proxy_ptr.h"
 #include <iostream>
 #include <chrono>
 #include <array>
 #include <thread>
-#include "../include/proxy_ptr/proxy_ptr.h"
 
 #ifdef _DEBUG
     #define TIMES 2000
