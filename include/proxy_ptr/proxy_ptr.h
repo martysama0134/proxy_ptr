@@ -42,12 +42,14 @@ namespace proxy {
     template <class Ty> class proxy_parent_base;
 
     namespace detail {
+        template <class... args> using void_t = void;
+
         template <class _Fx, class _Arg, class = void>
         struct _can_call_function_object : std::false_type {};
         template <class _Fx, class _Arg>
         struct _can_call_function_object<
             _Fx, _Arg,
-            std::void_t<decltype(std::declval<_Fx>()(std::declval<_Arg>()))>>
+            void_t<decltype(std::declval<_Fx>()(std::declval<_Arg>()))>>
             : std::true_type {};
 
         template <class Ty> struct _deduce_ref_count_type;
@@ -59,17 +61,17 @@ namespace proxy {
         };
 
         template <class Ty>
-        using deduce_ref_count_type = _deduce_ref_count_type<Ty>::type;
+        using deduce_ref_count_type = typename _deduce_ref_count_type<Ty>::type;
 
-        template <class _Ty, class _Atomic> class _proxy_common_state_base {
+        template <class Type, class AtomicType> class _proxy_common_state_base {
            protected:
-            using ref_count_t = deduce_ref_count_type<_Atomic>;
-            _Ty* _ptr = nullptr;
+            using ref_count_t = deduce_ref_count_type<AtomicType>;
+            Type* _ptr = nullptr;
             ref_count_t _ref_count = static_cast<size_t>(0);
             bool _alive = false;
 
            public:
-            _proxy_common_state_base(_Ty* p) : _ptr(p) { _alive = true; }
+            _proxy_common_state_base(Type* p) : _ptr(p) { _alive = true; }
 
             void inc_ref() { _ref_count++; }
             bool dec_ref() {
@@ -79,8 +81,8 @@ namespace proxy {
             }
 
             bool alive() const { return _alive; }
-            _Ty* get() const { return _ptr; }
-            _Ty* release() {
+            Type* get() const { return _ptr; }
+            Type* release() {
                 _alive = false;
                 return _ptr;
             }
@@ -88,21 +90,21 @@ namespace proxy {
             virtual ~_proxy_common_state_base() {}
         };
 
-        template <class _Ty, class _Dx, class _Atomic>
+        template <class Type, class Dex, class AtomicType>
         class _proxy_common_state
-            : private _Dx,
-              public _proxy_common_state_base<_Ty, _Atomic> {
+            : private Dex,
+              public _proxy_common_state_base<Type, AtomicType> {
            public:
-            _proxy_common_state(_Ty* ptr)
-                : _proxy_common_state_base<_Ty, _Atomic>(ptr) {}
-            _proxy_common_state(_Ty* ptr, const _Dx& dx)
-                : _proxy_common_state_base<_Ty, _Atomic>(ptr) {
-                static_cast<_Dx&>(*this) = dx;
+            _proxy_common_state(Type* ptr)
+                : _proxy_common_state_base<Type, AtomicType>(ptr) {}
+            _proxy_common_state(Type* ptr, const Dex& dx)
+                : _proxy_common_state_base<Type, AtomicType>(ptr) {
+                static_cast<Dex&>(*this) = dx;
             }
 
             void delete_ptr() {
                 if (this->_ptr && this->_alive) {
-                    static_cast<_Dx&>(*this)(this->_ptr);
+                    static_cast<Dex&>(*this)(this->_ptr);
                     this->_alive = false;
                 }
             }
@@ -129,30 +131,30 @@ namespace proxy {
             !PROXY_PTR_IS_ARRAY(Ty) ||
             (PROXY_PTR_IS_ARRAY(Ty) && PROXY_PTR_EXTENT(Ty) == 0);
 
-        template <class _Ty, class _Dx>
+        template <class Type, class Dex>
         constexpr bool is_valid_deleter =
-            std::is_move_constructible_v<_Dx> &&
-            detail::_can_call_function_object<_Dx&, _Ty*&>::value;
+            std::is_move_constructible<Dex>::value &&
+            detail::_can_call_function_object<Dex&, Type*&>::value;
 
         template <class Ty>
         constexpr bool is_valid_atomic_flag =
-            std::is_same_v<Ty, proxy_atomic> ||
-            std::is_same_v<Ty, proxy_non_atomic>;
+            std::is_same<Ty, proxy_atomic>::value ||
+            std::is_same<Ty, proxy_non_atomic>::value;
 
         template <class Ty>
         using enable_valid_atomic_flag =
             std::enable_if_t<is_valid_atomic_flag<Ty>>;
     }  // namespace detail
 
-    template <class _RTy, class _AtomicFlag = proxy_non_atomic,
-              class = detail::enable_valid_atomic_flag<_AtomicFlag>>
+    template <class _RTy, class AtomicTypeFlag = proxy_non_atomic,
+              class = detail::enable_valid_atomic_flag<AtomicTypeFlag>>
     class proxy_ptr {
-        using _Ty = detail::extract_proxy_type<_RTy>;
-        using _common_Ptr_Ty =
-            detail::_proxy_common_state_base<_Ty, _AtomicFlag>;
+        using Type = detail::extract_proxy_type<_RTy>;
+        using _common_PtrType =
+            detail::_proxy_common_state_base<Type, AtomicTypeFlag>;
 
        protected:
-        proxy_ptr(_common_Ptr_Ty* _ptr) {
+        proxy_ptr(_common_PtrType* _ptr) {
             _ppobj = _ptr;
             if (_ppobj)
                 _ppobj->inc_ref();
@@ -162,89 +164,89 @@ namespace proxy {
         proxy_ptr() {}
         proxy_ptr(std::nullptr_t) {}
         proxy_ptr(const proxy_ptr& n) { _proxy_from(n); }
-        explicit proxy_ptr(_Ty* r) {
-            using deleter_type = std::default_delete<_Ty>;
+        explicit proxy_ptr(Type* r) {
+            using deleter_type = std::default_delete<Type>;
             using common_ptr_type =
-                detail::_proxy_common_state<_Ty, deleter_type, _AtomicFlag>;
+                detail::_proxy_common_state<Type, deleter_type, AtomicTypeFlag>;
             _detach(new common_ptr_type(r));
         }
-        template <class _Dx,
-                  std::enable_if_t<detail::is_valid_deleter<_Ty, _Dx>, int> = 0>
-        explicit proxy_ptr(_Ty* r, const _Dx& dx) {
+        template <class Dex, std::enable_if_t<
+                                 detail::is_valid_deleter<Type, Dex>, int> = 0>
+        explicit proxy_ptr(Type* r, const Dex& dx) {
             using common_ptr_type =
-                detail::_proxy_common_state<_Ty, _Dx, _AtomicFlag>;
+                detail::_proxy_common_state<Type, Dex, AtomicTypeFlag>;
             _detach(new common_ptr_type(r, dx));
         }
 
         explicit operator bool() const { return alive(); }
-        explicit operator _Ty*() const { return get(); }
+        explicit operator Type*() const { return get(); }
 
-        template <class _Ty2>
+        template <class Type2>
         PROXY_PTR_NO_DISCARD bool operator==(
-            const proxy::proxy_ptr<_Ty2>& _Right) const noexcept {
+            const proxy::proxy_ptr<Type2>& _Right) const noexcept {
             return get() == _Right.get();
         }
 
-        template <class _Ty2>
+        template <class Type2>
         PROXY_PTR_NO_DISCARD bool operator!=(
-            const proxy::proxy_ptr<_Ty2>& _Right) const noexcept {
+            const proxy::proxy_ptr<Type2>& _Right) const noexcept {
             return !(*this == _Right);
         }
 
-        template <class _Ty2>
+        template <class Type2>
         PROXY_PTR_NO_DISCARD bool operator<(
-            const proxy::proxy_ptr<_Ty2>& _Right) const noexcept {
+            const proxy::proxy_ptr<Type2>& _Right) const noexcept {
             return get() < _Right.get();
         }
 
-        template <class _Ty2>
+        template <class Type2>
         PROXY_PTR_NO_DISCARD bool operator>=(
-            const proxy::proxy_ptr<_Ty2>& _Right) const noexcept {
+            const proxy::proxy_ptr<Type2>& _Right) const noexcept {
             return !(*this < _Right);
         }
 
-        template <class _Ty2>
+        template <class Type2>
         PROXY_PTR_NO_DISCARD bool operator>(
-            const proxy::proxy_ptr<_Ty2>& _Right) const noexcept {
+            const proxy::proxy_ptr<Type2>& _Right) const noexcept {
             return _Right < *this;
         }
 
-        template <class _Ty2>
+        template <class Type2>
         PROXY_PTR_NO_DISCARD bool operator<=(
-            const proxy::proxy_ptr<_Ty2>& _Right) const noexcept {
+            const proxy::proxy_ptr<Type2>& _Right) const noexcept {
             return !(_Right < *this);
         }
 
-        _Ty* get() const {
+        Type* get() const {
             if (!_is_Pointing())
                 return nullptr;
             return _ppobj->get();
         }
 
-        _Ty* ptr() const { return get(); }
+        Type* ptr() const { return get(); }
 
-        template <class _Ty2 = _Ty,
-                  class = std::enable_if_t<!PROXY_PTR_IS_ARRAY(_Ty2)>>
-        _Ty2* operator->() const {
+        template <class Type2 = Type,
+                  class = std::enable_if_t<!PROXY_PTR_IS_ARRAY(Type2)>>
+        Type2* operator->() const {
             assert(_is_Pointing());
             return get();
         }
 
-        template <class _Ty2 = _Ty,
-                  class = std::enable_if_t<PROXY_PTR_IS_ARRAY(_Ty2)>>
-        _Ty2& operator[](std::ptrdiff_t p) const {
+        template <class Type2 = Type,
+                  class = std::enable_if_t<PROXY_PTR_IS_ARRAY(Type2)>>
+        Type2& operator[](std::ptrdiff_t p) const {
             assert(_is_Pointing());
             return (*get())[p];
         }
 
-        template <class _Ty2 = _Ty,
-                  class = std::enable_if_t<!PROXY_PTR_IS_ARRAY(_Ty2)>>
-        _Ty2& operator*() const {
+        template <class Type2 = Type,
+                  class = std::enable_if_t<!PROXY_PTR_IS_ARRAY(Type2)>>
+        Type2& operator*() const {
             assert(_is_Pointing());
             return *get();
         }
 
-        decltype(auto) operator=(const proxy_ptr<_Ty>& r) {
+        decltype(auto) operator=(const proxy_ptr<Type>& r) {
             _detach(r._ppobj);
             return (*this);
         }
@@ -254,7 +256,7 @@ namespace proxy {
             return (*this);
         }
 
-        _Ty* proxy_release() {
+        Type* proxy_release() {
             if (!_is_Pointing())
                 return nullptr;
             return _ppobj->release();
@@ -278,7 +280,7 @@ namespace proxy {
             _detach(n._ppobj);
         }
         bool _is_Pointing() const { return _ppobj != nullptr; }
-        void _detach(_common_Ptr_Ty* n = nullptr) {
+        void _detach(_common_PtrType* n = nullptr) {
             if (_ppobj)
                 if (!_ppobj->dec_ref())
                     delete (_ppobj);
@@ -289,15 +291,15 @@ namespace proxy {
         }
 
        private:
-        _common_Ptr_Ty* _ppobj = nullptr;
+        _common_PtrType* _ppobj = nullptr;
     };
 
-    template <class _Ty> class proxy_parent_base {
+    template <class Type> class proxy_parent_base {
        public:
-        proxy_ptr<_Ty> proxy() { return {_proxyPtr}; }
+        proxy_ptr<Type> proxy() { return {_proxyPtr}; }
         void proxy_delete() {
             auto ret = _proxyPtr.proxy_release();
-            _proxyPtr = static_cast<_Ty*>(this);
+            _proxyPtr = static_cast<Type*>(this);
         }
         virtual ~proxy_parent_base() {
             auto ret = _proxyPtr.proxy_release();
@@ -305,7 +307,7 @@ namespace proxy {
         }
 
        private:
-        proxy_ptr<_Ty> _proxyPtr{static_cast<_Ty*>(this)};
+        proxy_ptr<Type> _proxyPtr{static_cast<Type*>(this)};
     };
 
     namespace detail {
@@ -339,229 +341,229 @@ namespace proxy {
 
 }  // namespace proxy
 
-template <class _Ty>
-PROXY_PTR_NO_DISCARD bool operator==(const proxy::proxy_ptr<_Ty>& _Left,
+template <class Type>
+PROXY_PTR_NO_DISCARD bool operator==(const proxy::proxy_ptr<Type>& _Left,
                                      std::nullptr_t) noexcept {
     return !_Left;
 }
 
-template <class _Ty>
+template <class Type>
 PROXY_PTR_NO_DISCARD bool operator==(
-    std::nullptr_t, const proxy::proxy_ptr<_Ty>& _Right) noexcept {
+    std::nullptr_t, const proxy::proxy_ptr<Type>& _Right) noexcept {
     return !_Right;
 }
 
-template <class _Ty>
-PROXY_PTR_NO_DISCARD bool operator!=(const proxy::proxy_ptr<_Ty>& _Left,
+template <class Type>
+PROXY_PTR_NO_DISCARD bool operator!=(const proxy::proxy_ptr<Type>& _Left,
                                      std::nullptr_t _Right) noexcept {
     return !(_Left == _Right);
 }
 
-template <class _Ty>
+template <class Type>
 PROXY_PTR_NO_DISCARD bool operator!=(
-    std::nullptr_t _Left, const proxy::proxy_ptr<_Ty>& _Right) noexcept {
+    std::nullptr_t _Left, const proxy::proxy_ptr<Type>& _Right) noexcept {
     return !(_Left == _Right);
 }
 
-template <class _Ty>
-PROXY_PTR_NO_DISCARD bool operator<(const proxy::proxy_ptr<_Ty>& _Left,
+template <class Type>
+PROXY_PTR_NO_DISCARD bool operator<(const proxy::proxy_ptr<Type>& _Left,
                                     std::nullptr_t _Right) noexcept {
-    using _Ptr = typename proxy::proxy_ptr<_Ty>::pointer;
+    using _Ptr = typename proxy::proxy_ptr<Type>::pointer;
     return std::less<_Ptr>()(_Left.get(), _Right);
 }
 
-template <class _Ty>
+template <class Type>
 PROXY_PTR_NO_DISCARD bool operator<(
-    std::nullptr_t _Left, const proxy::proxy_ptr<_Ty>& _Right) noexcept {
-    using _Ptr = typename proxy::proxy_ptr<_Ty>::pointer;
+    std::nullptr_t _Left, const proxy::proxy_ptr<Type>& _Right) noexcept {
+    using _Ptr = typename proxy::proxy_ptr<Type>::pointer;
     return std::less<_Ptr>()(_Left, _Right.get());
 }
 
-template <class _Ty>
-PROXY_PTR_NO_DISCARD bool operator>=(const proxy::proxy_ptr<_Ty>& _Left,
+template <class Type>
+PROXY_PTR_NO_DISCARD bool operator>=(const proxy::proxy_ptr<Type>& _Left,
                                      std::nullptr_t _Right) noexcept {
     return !(_Left < _Right);
 }
 
-template <class _Ty>
+template <class Type>
 PROXY_PTR_NO_DISCARD bool operator>=(std::nullptr_t _Left,
-                                     const proxy::proxy_ptr<_Ty>& _Right) {
+                                     const proxy::proxy_ptr<Type>& _Right) {
     return !(_Left < _Right);
 }
 
-template <class _Ty>
-PROXY_PTR_NO_DISCARD bool operator>(const proxy::proxy_ptr<_Ty>& _Left,
+template <class Type>
+PROXY_PTR_NO_DISCARD bool operator>(const proxy::proxy_ptr<Type>& _Left,
                                     std::nullptr_t _Right) {
     return _Right < _Left;
 }
 
-template <class _Ty>
+template <class Type>
 PROXY_PTR_NO_DISCARD bool operator>(std::nullptr_t _Left,
-                                    const proxy::proxy_ptr<_Ty>& _Right) {
+                                    const proxy::proxy_ptr<Type>& _Right) {
     return _Right < _Left;
 }
 
-template <class _Ty>
-PROXY_PTR_NO_DISCARD bool operator<=(const proxy::proxy_ptr<_Ty>& _Left,
+template <class Type>
+PROXY_PTR_NO_DISCARD bool operator<=(const proxy::proxy_ptr<Type>& _Left,
                                      std::nullptr_t _Right) {
     return !(_Right < _Left);
 }
 
-template <class _Ty>
+template <class Type>
 PROXY_PTR_NO_DISCARD bool operator<=(std::nullptr_t _Left,
-                                     const proxy::proxy_ptr<_Ty>& _Right) {
+                                     const proxy::proxy_ptr<Type>& _Right) {
     return !(_Right < _Left);
 }
 
 //
 
-template <class _Ty>
-PROXY_PTR_NO_DISCARD bool operator==(const proxy::proxy_ptr<_Ty>& _Left,
-                                     const _Ty* const _ptr) noexcept {
+template <class Type>
+PROXY_PTR_NO_DISCARD bool operator==(const proxy::proxy_ptr<Type>& _Left,
+                                     const Type* const _ptr) noexcept {
     return _Left.get() == _ptr;
 }
 
-template <class _Ty>
+template <class Type>
 PROXY_PTR_NO_DISCARD bool operator==(
-    const _Ty* _ptr, const proxy::proxy_ptr<_Ty>& _Right) noexcept {
+    const Type* _ptr, const proxy::proxy_ptr<Type>& _Right) noexcept {
     return _Right.get() == _ptr;
 }
 
-template <class _Ty>
-PROXY_PTR_NO_DISCARD bool operator!=(const proxy::proxy_ptr<_Ty>& _Left,
-                                     const _Ty* const _Right) noexcept {
+template <class Type>
+PROXY_PTR_NO_DISCARD bool operator!=(const proxy::proxy_ptr<Type>& _Left,
+                                     const Type* const _Right) noexcept {
     return !(_Left == _Right);
 }
 
-template <class _Ty>
+template <class Type>
 PROXY_PTR_NO_DISCARD bool operator!=(
-    const _Ty* _Left, const proxy::proxy_ptr<_Ty>& _Right) noexcept {
+    const Type* _Left, const proxy::proxy_ptr<Type>& _Right) noexcept {
     return !(_Left == _Right);
 }
 
-template <class _Ty>
-PROXY_PTR_NO_DISCARD bool operator<(const proxy::proxy_ptr<_Ty>& _Left,
-                                    const _Ty* const _Right) {
-    using _Ptr = typename proxy::proxy_ptr<_Ty>::pointer;
+template <class Type>
+PROXY_PTR_NO_DISCARD bool operator<(const proxy::proxy_ptr<Type>& _Left,
+                                    const Type* const _Right) {
+    using _Ptr = typename proxy::proxy_ptr<Type>::pointer;
     return std::less<_Ptr>()(_Left.get(), _Right);
 }
 
-template <class _Ty>
-PROXY_PTR_NO_DISCARD bool operator<(const _Ty* const _Left,
-                                    const proxy::proxy_ptr<_Ty>& _Right) {
-    using _Ptr = typename proxy::proxy_ptr<_Ty>::pointer;
+template <class Type>
+PROXY_PTR_NO_DISCARD bool operator<(const Type* const _Left,
+                                    const proxy::proxy_ptr<Type>& _Right) {
+    using _Ptr = typename proxy::proxy_ptr<Type>::pointer;
     return std::less<_Ptr>()(_Left, _Right.get());
 }
 
-template <class _Ty>
-PROXY_PTR_NO_DISCARD bool operator>=(const proxy::proxy_ptr<_Ty>& _Left,
-                                     const _Ty* const _Right) {
+template <class Type>
+PROXY_PTR_NO_DISCARD bool operator>=(const proxy::proxy_ptr<Type>& _Left,
+                                     const Type* const _Right) {
     return !(_Left < _Right);
 }
 
-template <class _Ty>
-PROXY_PTR_NO_DISCARD bool operator>=(const _Ty* const _Left,
-                                     const proxy::proxy_ptr<_Ty>& _Right) {
+template <class Type>
+PROXY_PTR_NO_DISCARD bool operator>=(const Type* const _Left,
+                                     const proxy::proxy_ptr<Type>& _Right) {
     return !(_Left < _Right);
 }
 
-template <class _Ty>
-PROXY_PTR_NO_DISCARD bool operator>(const proxy::proxy_ptr<_Ty>& _Left,
-                                    const _Ty* const _Right) {
+template <class Type>
+PROXY_PTR_NO_DISCARD bool operator>(const proxy::proxy_ptr<Type>& _Left,
+                                    const Type* const _Right) {
     return _Right < _Left;
 }
 
-template <class _Ty>
-PROXY_PTR_NO_DISCARD bool operator>(const _Ty* const _Left,
-                                    const proxy::proxy_ptr<_Ty>& _Right) {
+template <class Type>
+PROXY_PTR_NO_DISCARD bool operator>(const Type* const _Left,
+                                    const proxy::proxy_ptr<Type>& _Right) {
     return _Right < _Left;
 }
 
-template <class _Ty>
-PROXY_PTR_NO_DISCARD bool operator<=(const proxy::proxy_ptr<_Ty>& _Left,
-                                     const _Ty* const _Right) {
+template <class Type>
+PROXY_PTR_NO_DISCARD bool operator<=(const proxy::proxy_ptr<Type>& _Left,
+                                     const Type* const _Right) {
     return !(_Right < _Left);
 }
 
-template <class _Ty>
-PROXY_PTR_NO_DISCARD bool operator<=(const _Ty* const _Left,
-                                     const proxy::proxy_ptr<_Ty>& _Right) {
+template <class Type>
+PROXY_PTR_NO_DISCARD bool operator<=(const Type* const _Left,
+                                     const proxy::proxy_ptr<Type>& _Right) {
     return !(_Right < _Left);
 }
 
 //
 
-template <class _Ty>
-PROXY_PTR_NO_DISCARD bool operator==(const proxy::proxy_ptr<_Ty>& _Left,
-                                     _Ty* const _ptr) noexcept {
+template <class Type>
+PROXY_PTR_NO_DISCARD bool operator==(const proxy::proxy_ptr<Type>& _Left,
+                                     Type* const _ptr) noexcept {
     return _Left.get() == _ptr;
 }
 
-template <class _Ty>
+template <class Type>
 PROXY_PTR_NO_DISCARD bool operator==(
-    _Ty* const _ptr, const proxy::proxy_ptr<_Ty>& _Right) noexcept {
+    Type* const _ptr, const proxy::proxy_ptr<Type>& _Right) noexcept {
     return _Right.get() == _ptr;
 }
 
-template <class _Ty>
-PROXY_PTR_NO_DISCARD bool operator!=(const proxy::proxy_ptr<_Ty>& _Left,
-                                     _Ty* const _Right) noexcept {
+template <class Type>
+PROXY_PTR_NO_DISCARD bool operator!=(const proxy::proxy_ptr<Type>& _Left,
+                                     Type* const _Right) noexcept {
     return !(_Left == _Right);
 }
 
-template <class _Ty>
+template <class Type>
 PROXY_PTR_NO_DISCARD bool operator!=(
-    _Ty* const _Left, const proxy::proxy_ptr<_Ty>& _Right) noexcept {
+    Type* const _Left, const proxy::proxy_ptr<Type>& _Right) noexcept {
     return !(_Left == _Right);
 }
 
-template <class _Ty>
-PROXY_PTR_NO_DISCARD bool operator<(const proxy::proxy_ptr<_Ty>& _Left,
-                                    _Ty* const _Right) {
-    using _Ptr = typename proxy::proxy_ptr<_Ty>::pointer;
+template <class Type>
+PROXY_PTR_NO_DISCARD bool operator<(const proxy::proxy_ptr<Type>& _Left,
+                                    Type* const _Right) {
+    using _Ptr = typename proxy::proxy_ptr<Type>::pointer;
     return std::less<_Ptr>()(_Left.get(), _Right);
 }
 
-template <class _Ty>
-PROXY_PTR_NO_DISCARD bool operator<(_Ty* const _Left,
-                                    const proxy::proxy_ptr<_Ty>& _Right) {
-    using _Ptr = typename proxy::proxy_ptr<_Ty>::pointer;
+template <class Type>
+PROXY_PTR_NO_DISCARD bool operator<(Type* const _Left,
+                                    const proxy::proxy_ptr<Type>& _Right) {
+    using _Ptr = typename proxy::proxy_ptr<Type>::pointer;
     return std::less<_Ptr>()(_Left, _Right.get());
 }
 
-template <class _Ty>
-PROXY_PTR_NO_DISCARD bool operator>=(const proxy::proxy_ptr<_Ty>& _Left,
-                                     _Ty* const _Right) {
+template <class Type>
+PROXY_PTR_NO_DISCARD bool operator>=(const proxy::proxy_ptr<Type>& _Left,
+                                     Type* const _Right) {
     return !(_Left < _Right);
 }
 
-template <class _Ty>
-PROXY_PTR_NO_DISCARD bool operator>=(_Ty* const _Left,
-                                     const proxy::proxy_ptr<_Ty>& _Right) {
+template <class Type>
+PROXY_PTR_NO_DISCARD bool operator>=(Type* const _Left,
+                                     const proxy::proxy_ptr<Type>& _Right) {
     return !(_Left < _Right);
 }
 
-template <class _Ty>
-PROXY_PTR_NO_DISCARD bool operator>(const proxy::proxy_ptr<_Ty>& _Left,
-                                    _Ty* const _Right) {
+template <class Type>
+PROXY_PTR_NO_DISCARD bool operator>(const proxy::proxy_ptr<Type>& _Left,
+                                    Type* const _Right) {
     return _Right < _Left;
 }
 
-template <class _Ty>
-PROXY_PTR_NO_DISCARD bool operator>(_Ty* const _Left,
-                                    const proxy::proxy_ptr<_Ty>& _Right) {
+template <class Type>
+PROXY_PTR_NO_DISCARD bool operator>(Type* const _Left,
+                                    const proxy::proxy_ptr<Type>& _Right) {
     return _Right < _Left;
 }
 
-template <class _Ty>
-PROXY_PTR_NO_DISCARD bool operator<=(const proxy::proxy_ptr<_Ty>& _Left,
-                                     _Ty* const _Right) {
+template <class Type>
+PROXY_PTR_NO_DISCARD bool operator<=(const proxy::proxy_ptr<Type>& _Left,
+                                     Type* const _Right) {
     return !(_Right < _Left);
 }
 
-template <class _Ty>
-PROXY_PTR_NO_DISCARD bool operator<=(_Ty* const _Left,
-                                     const proxy::proxy_ptr<_Ty>& _Right) {
+template <class Type>
+PROXY_PTR_NO_DISCARD bool operator<=(Type* const _Left,
+                                     const proxy::proxy_ptr<Type>& _Right) {
     return !(_Right < _Left);
 }
 
