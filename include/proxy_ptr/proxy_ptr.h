@@ -87,6 +87,7 @@ namespace proxy {
                 return _ptr;
             }
 
+            virtual void delete_ptr() = 0;
             virtual ~_proxy_common_state_base() {}
         };
 
