@@ -81,6 +81,7 @@ namespace proxy {
             }
 
             bool alive() const { return _alive; }
+            bool expired() const { return !alive(); }
             Type* get() const { return _ptr; }
             Type* release() {
                 _alive = false;
@@ -270,6 +271,10 @@ namespace proxy {
 
         bool alive() const {
             return _is_Pointing() && _ppobj->alive() && _ppobj->get();
+        }
+
+        bool expired() const {
+            return !alive();
         }
 
         ~proxy_ptr() { _detach(); }
