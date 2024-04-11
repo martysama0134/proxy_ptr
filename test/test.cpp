@@ -4,12 +4,6 @@
 #include <array>
 #include <thread>
 
-#ifdef _DEBUG
-    #define TIMES 2000
-#else
-    #define TIMES 20000
-#endif
-
 double get_time() {
     return std::chrono::duration<double>(
                std::chrono::high_resolution_clock::now().time_since_epoch())
@@ -29,7 +23,13 @@ void execute_print_time(const std::string& name, int times, Func f) {
     std::cout << name << ": finish in " << time << std::endl;
 }
 
-int main() {
+void BenchTest() {
+    #ifdef _DEBUG
+    constexpr auto TIMES = 2000;
+    #else
+    constexpr auto TIMES = 20000;
+    #endif
+
     execute_print_time("shared >> huge copy", TIMES, []() {
         auto root = std::make_shared<char[]>(100000);
         for (int i = 0; i < 100000; i++)
@@ -56,9 +56,62 @@ int main() {
                     std::cout << "what the hell\n";
         return root.get();
     });
+}
 
-    std::cout << "test completed." << std::endl;
-    std::string s;
-    std::cin >> s;
+void PrintTest() {
+    std::cout << "monkey==" << std::endl;
+    auto root = proxy::make_proxy<std::string>("monkey");
+    auto root2 = root;
+    auto root3 = root2;
+    std::cout << *root.get() << std::endl;
+    std::cout << *root2.get() << std::endl;
+    std::cout << *root3.get() << std::endl;
+    printf("%s\n", root3.get()->c_str());
+    std::cout << "root " << (root.alive() ? "alive" : "expired") << std::endl;
+    std::cout << "root2 " << (root2.alive() ? "alive" : "expired") << std::endl;
+    std::cout << "root3 " << (root3.alive() ? "alive" : "expired") << std::endl;
+
+    // still valid till here
+    root3.proxy_release();
+
+    std::cout << "root " << (root.alive() ? "alive" : "expired") << std::endl;
+    std::cout << "root2 " << (root2.alive() ? "alive" : "expired") << std::endl;
+    std::cout << "root3 " << (root3.alive() ? "alive" : "expired") << std::endl;
+}
+
+void PrintSharedTest() {
+    std::cout << "monkey==" << std::endl;
+    auto root = std::make_shared<std::string>("monkey");
+    auto root2 = root;
+    std::weak_ptr<std::string> root3 = root2;
+
+    std::cout << *root.get() << std::endl;
+    std::cout << *root2.get() << std::endl;
+    std::cout << *root3.lock() << std::endl;
+    printf("%s\n", root.get()->c_str());
+
+    std::cout << "root " << (root ? "alive" : "expired") << std::endl;
+    std::cout << "root2 " << (root2 ? "alive" : "expired") << std::endl;
+    std::cout << "root3 " << (!root3.expired() ? "alive" : "expired") << std::endl;
+
+    // still valid till here
+    root.reset();
+    root2.reset();
+    
+    std::cout << "root " << (root ? "alive" : "expired") << std::endl;
+    std::cout << "root2 " << (root2 ? "alive" : "expired") << std::endl;
+    std::cout << "root3 " << (!root3.expired() ? "alive" : "expired") << std::endl;
+}
+
+int main() {
+    std::cout << "Starting the tests..." << std::endl;
+
+    //BenchTest();
+    //PrintTest();
+    //PrintSharedTest();
+
+    std::cout << "All tests completed." << std::endl;
+    std::getchar();
+    std::getchar();
     return 0;
 }
