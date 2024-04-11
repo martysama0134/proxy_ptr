@@ -186,7 +186,7 @@ namespace proxy {
         template <class Type2, class AtomicType2>
         PROXY_PTR_NO_DISCARD bool operator==(
             const proxy::proxy_ptr<Type2, AtomicType2>& _Right) const noexcept {
-            return get() == _Right.get();
+            return hashkey() == _Right.hashkey();
         }
 
         template <class Type2, class AtomicType2>
@@ -198,7 +198,7 @@ namespace proxy {
         template <class Type2, class AtomicType2>
         PROXY_PTR_NO_DISCARD bool operator<(
             const proxy::proxy_ptr<Type2, AtomicType2>& _Right) const noexcept {
-            return get() < _Right.get();
+            return hashkey() < _Right.hashkey();
         }
 
         template <class Type2, class AtomicType2>
@@ -219,32 +219,32 @@ namespace proxy {
             return !(_Right < *this);
         }
 
-        Type* get() const {
+        Type* hashkey() const {
             if (!_is_Pointing())
                 return nullptr;
             return _ppobj->get();
         }
 
-        Type* ptr() const { return get(); }
+        Type* get() const { return alive() ? hashkey() : nullptr; }
 
         template <class Type2 = Type,
                   class = std::enable_if_t<!PROXY_PTR_IS_ARRAY(Type2)>>
         Type2* operator->() const {
-            assert(_is_Pointing());
+            assert(_is_Pointing() && alive());
             return get();
         }
 
         template <class Type2 = Type,
                   class = std::enable_if_t<PROXY_PTR_IS_ARRAY(Type2)>>
         Type2& operator[](std::ptrdiff_t p) const {
-            assert(_is_Pointing());
+            assert(_is_Pointing() && alive());
             return (*get())[p];
         }
 
         template <class Type2 = Type,
                   class = std::enable_if_t<!PROXY_PTR_IS_ARRAY(Type2)>>
         Type2& operator*() const {
-            assert(_is_Pointing());
+            assert(_is_Pointing() && alive());
             return *get();
         }
 
@@ -385,7 +385,7 @@ PROXY_PTR_NO_DISCARD bool operator<(
     const proxy::proxy_ptr<Type, AtomicType>& _Left,
     std::nullptr_t _Right) noexcept {
     using _Ptr = typename proxy::proxy_ptr<Type, AtomicType>::pointer;
-    return std::less<_Ptr>()(_Left.get(), _Right);
+    return std::less<_Ptr>()(_Left.hashkey(), _Right);
 }
 
 template <class Type, class AtomicType>
@@ -393,7 +393,7 @@ PROXY_PTR_NO_DISCARD bool operator<(
     std::nullptr_t _Left,
     const proxy::proxy_ptr<Type, AtomicType>& _Right) noexcept {
     using _Ptr = typename proxy::proxy_ptr<Type, AtomicType>::pointer;
-    return std::less<_Ptr>()(_Left, _Right.get());
+    return std::less<_Ptr>()(_Left, _Right.hashkey());
 }
 
 template <class Type, class AtomicType>
@@ -439,14 +439,14 @@ template <class Type, class AtomicType>
 PROXY_PTR_NO_DISCARD bool operator==(
     const proxy::proxy_ptr<Type, AtomicType>& _Left,
     const Type* const _ptr) noexcept {
-    return _Left.get() == _ptr;
+    return _Left.hashkey() == _ptr;
 }
 
 template <class Type, class AtomicType>
 PROXY_PTR_NO_DISCARD bool operator==(
     const Type* _ptr,
     const proxy::proxy_ptr<Type, AtomicType>& _Right) noexcept {
-    return _Right.get() == _ptr;
+    return _Right.hashkey() == _ptr;
 }
 
 template <class Type, class AtomicType>
@@ -467,14 +467,14 @@ template <class Type, class AtomicType>
 PROXY_PTR_NO_DISCARD bool operator<(
     const proxy::proxy_ptr<Type, AtomicType>& _Left, const Type* const _Right) {
     using _Ptr = typename proxy::proxy_ptr<Type, AtomicType>::pointer;
-    return std::less<_Ptr>()(_Left.get(), _Right);
+    return std::less<_Ptr>()(_Left.hashkey(), _Right);
 }
 
 template <class Type, class AtomicType>
 PROXY_PTR_NO_DISCARD bool operator<(
     const Type* const _Left, const proxy::proxy_ptr<Type, AtomicType>& _Right) {
     using _Ptr = typename proxy::proxy_ptr<Type, AtomicType>::pointer;
-    return std::less<_Ptr>()(_Left, _Right.get());
+    return std::less<_Ptr>()(_Left, _Right.hashkey());
 }
 
 template <class Type, class AtomicType>
@@ -519,14 +519,14 @@ template <class Type, class AtomicType>
 PROXY_PTR_NO_DISCARD bool operator==(
     const proxy::proxy_ptr<Type, AtomicType>& _Left,
     Type* const _ptr) noexcept {
-    return _Left.get() == _ptr;
+    return _Left.hashkey() == _ptr;
 }
 
 template <class Type, class AtomicType>
 PROXY_PTR_NO_DISCARD bool operator==(
     Type* const _ptr,
     const proxy::proxy_ptr<Type, AtomicType>& _Right) noexcept {
-    return _Right.get() == _ptr;
+    return _Right.hashkey() == _ptr;
 }
 
 template <class Type, class AtomicType>
@@ -547,14 +547,14 @@ template <class Type, class AtomicType>
 PROXY_PTR_NO_DISCARD bool operator<(
     const proxy::proxy_ptr<Type, AtomicType>& _Left, Type* const _Right) {
     using _Ptr = typename proxy::proxy_ptr<Type, AtomicType>::pointer;
-    return std::less<_Ptr>()(_Left.get(), _Right);
+    return std::less<_Ptr>()(_Left.hashkey(), _Right);
 }
 
 template <class Type, class AtomicType>
 PROXY_PTR_NO_DISCARD bool operator<(
     Type* const _Left, const proxy::proxy_ptr<Type, AtomicType>& _Right) {
     using _Ptr = typename proxy::proxy_ptr<Type, AtomicType>::pointer;
-    return std::less<_Ptr>()(_Left, _Right.get());
+    return std::less<_Ptr>()(_Left, _Right.hashkey());
 }
 
 template <class Type, class AtomicType>
@@ -596,7 +596,7 @@ PROXY_PTR_NO_DISCARD bool operator<=(
 template <class Type, class AtomicType>
 struct std::hash<proxy::proxy_ptr<Type, AtomicType>> {
     size_t operator()(const proxy::proxy_ptr<Type, AtomicType> _ptr) const {
-        return reinterpret_cast<std::uintptr_t>(_ptr.get());
+        return reinterpret_cast<std::uintptr_t>(_ptr.hashkey());
     }
 };
 
