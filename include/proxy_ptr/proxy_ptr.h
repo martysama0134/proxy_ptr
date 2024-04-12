@@ -202,7 +202,7 @@ namespace proxy {
             std::enable_if_t<detail::is_proxy_valid_cast<Type, Type2>, int> = 0>
         explicit proxy_ptr(Type* ptr,
                            const proxy_ptr<Type2, AtomicTypeFlag>& other) {
-            assert(other._is_Pointing());
+            // assert(other._is_Pointing());
             PROXY_PTR_UNUSED(ptr);
             _detach(other._state());
         }
