@@ -352,10 +352,7 @@ namespace proxy {
             auto ret = _proxyPtr.proxy_release();
             _proxyPtr = static_cast<Type*>(this);
         }
-        virtual ~proxy_parent_base() {
-            auto ret = _proxyPtr.proxy_release();
-            PROXY_PTR_UNUSED(ret);
-        }
+        virtual ~proxy_parent_base() { _proxyPtr.proxy_delete(); }
 
        private:
         proxy_ptr<Type> _proxyPtr{static_cast<Type*>(this),
