@@ -152,6 +152,7 @@ namespace proxy {
     template <class _RTy, class AtomicTypeFlag = proxy_non_atomic,
               class = detail::enable_valid_atomic_flag<AtomicTypeFlag>>
     class proxy_ptr {
+       public:
         using Type = detail::extract_proxy_type<_RTy>;
         using _common_PtrType =
             detail::_proxy_common_state_base<Type, AtomicTypeFlag>;
@@ -305,6 +306,8 @@ namespace proxy {
        public:
         proxy_ptr<Type> proxy() { return {_proxyPtr}; }
         proxy_ptr<Type> proxy_from_this() { return {_proxyPtr}; }
+        template <class Derived>
+        proxy_ptr<Derived> proxy_from_base() { return { proxy::static_pointer_cast<Derived>(_proxyPtr)}; }
         void proxy_delete() {
             auto ret = _proxyPtr.proxy_release();
             _proxyPtr = static_cast<Type*>(this);
@@ -353,6 +356,36 @@ namespace proxy {
             return detail::make_proxy<Type, AtomicType>::construct(arg...);
         }
     };
+
+    template<class T, class U>
+    proxy::proxy_ptr<T> static_pointer_cast(const proxy::proxy_ptr<U>& r) noexcept
+    {
+        auto p = static_cast<typename proxy::proxy_ptr<T>::Type*>(r.get());
+        return proxy::proxy_ptr<T>{p};
+    }
+
+    template<class T, class U>
+    proxy::proxy_ptr<T> dynamic_pointer_cast(const proxy::proxy_ptr<U>& r) noexcept
+    {
+        if (auto p = dynamic_cast<typename proxy::proxy_ptr<T>::Type*>(r.get()))
+            return proxy::proxy_ptr<T>{p};
+        else
+            return proxy::proxy_ptr<T>{};
+    }
+
+    template<class T, class U>
+    proxy::proxy_ptr<T> const_pointer_cast(const proxy::proxy_ptr<U>& r) noexcept
+    {
+        auto p = const_cast<typename proxy::proxy_ptr<T>::Type*>(r.get());
+        return proxy::proxy_ptr<T>{p};
+    }
+
+    template<class T, class U>
+    proxy::proxy_ptr<T> reinterpret_pointer_cast(const proxy::proxy_ptr<U>& r) noexcept
+    {
+        auto p = reinterpret_cast<typename proxy::proxy_ptr<T>::Type*>(r.get());
+        return proxy::proxy_ptr<T>{p};
+    }
 
 }  // namespace proxy
 

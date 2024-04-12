@@ -181,6 +181,35 @@ void GetHashTest() {
         std::cout << "BUG elem4 is null and has not been found!" << std::endl;
 }
 
+class BaseShared : public std::enable_shared_from_this<BaseShared> {
+   public:
+    auto smth() { return shared_from_this(); }
+};
+
+class DerivedShared : public BaseShared {
+   public:
+    auto smth() { return std::static_pointer_cast<DerivedShared>(shared_from_this()); }
+};
+
+class BaseProxy : public proxy::enable_proxy_from_this<BaseProxy> {
+   public:
+    auto smth() { return proxy_from_this(); }
+};
+
+class DerivedProxy : public BaseProxy {
+
+};
+
+void InheritTest() {
+    auto derived = proxy::make_proxy<DerivedProxy>();
+    auto derived2 = derived->proxy_from_this();
+    //auto derived3 = derived->proxy_from_base<DerivedProxy>(); //todo kaboom missing reference sharing
+
+    std::cout << "derived " << derived.hashkey() << " == " << derived.get() << std::endl;
+    std::cout << "derived2 " << derived2.hashkey() << " == " << derived2.get() << std::endl;
+    //std::cout << "derived3 " << derived3.hashkey() << " == " << derived3.get() << std::endl;
+}
+
 int main() {
     std::cout << "Starting the tests..." << std::endl;
 
@@ -188,7 +217,8 @@ int main() {
     //PrintTest();
     //PrintSharedTest();
     //GetPtrTest();
-    GetHashTest();
+    //GetHashTest();
+    InheritTest();
 
     std::cout << "All tests completed." << std::endl;
     std::getchar();
