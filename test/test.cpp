@@ -133,12 +133,52 @@ void GetHashTest() {
     for (auto& elem : setList)
         std::cout << elem.hashkey() << " == " << elem.get() << std::endl;
 
-    // unvalidate the ptrs
+    // unvalidate the 3rd proxy
+    auto elem3b = elem3; // copy
     std::cout << "unvalidating the ptrs..." << std::endl;
-    elem3.proxy_release();
+    elem3.proxy_delete();
 
     for (auto& elem : setList)
         std::cout << elem.hashkey() << " == " << elem.get() << std::endl;
+
+    if (elem3 == nullptr)
+        std::cout << "elem3 is null and returns true if compared to nullptr" << std::endl;
+    else
+        std::cout << "BUG elem3 is null and returns false if compared to nullptr" << std::endl;
+
+    if (setList.contains(elem3))
+        std::cout << "elem3 is null and is found inside setList" << std::endl;
+    else
+        std::cout << "BUG elem3 is null and is not found inside setList" << std::endl;
+
+    // unvalidate all the proxies
+    elem1.proxy_delete();
+    elem2.proxy_delete();
+    elem3.proxy_delete();
+    elem4.proxy_delete();
+
+    for (auto& elem : setList)
+        std::cout << elem.hashkey() << " == " << elem.get() << std::endl;
+
+    if (auto it = setList.find(elem1); it != setList.end())
+        std::cout << "elem1 is null and has been found! " << it->hashkey() << " == " << it->get() << std::endl;
+    else
+        std::cout << "BUG elem1 is null and has not been found!" << std::endl;
+
+    if (auto it = setList.find(elem2); it != setList.end())
+        std::cout << "elem2 is null and has been found! " << it->hashkey() << " == " << it->get() << std::endl;
+    else
+        std::cout << "BUG elem2 is null and has not been found!" << std::endl;
+
+    if (auto it = setList.find(elem3); it != setList.end())
+        std::cout << "elem3 is null and has been found! " << it->hashkey() << " == " << it->get() << std::endl;
+    else
+        std::cout << "BUG elem3 is null and has not been found!" << std::endl;
+
+    if (auto it = setList.find(elem4); it != setList.end())
+        std::cout << "elem4 is null and has been found! " << it->hashkey() << " == " << it->get() << std::endl;
+    else
+        std::cout << "BUG elem4 is null and has not been found!" << std::endl;
 }
 
 int main() {
