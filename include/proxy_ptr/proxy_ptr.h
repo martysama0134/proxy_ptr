@@ -114,6 +114,10 @@ namespace proxy {
             virtual ~_proxy_common_state() { delete_ptr(); }
         };
 
+        template <class Type> struct non_deleter {
+            void operator()(Type* ptr) noexcept {}
+        };
+
         template <class Ty> struct _extract_proxy_pointer_type {
             using type = Ty*;
         };
@@ -174,7 +178,6 @@ namespace proxy {
             if (_ppobj)
                 _ppobj->inc_ref();
         }
-
 
        public:
         proxy_ptr() {}
@@ -355,7 +358,8 @@ namespace proxy {
         }
 
        private:
-        proxy_ptr<Type> _proxyPtr{static_cast<Type*>(this)};
+        proxy_ptr<Type> _proxyPtr{static_cast<Type*>(this),
+                                  detail::non_deleter<Type>()};
     };
 
     namespace detail {

@@ -213,6 +213,26 @@ void InheritTest() {
         std::cout << "derived2 is no longer alive." << std::endl;
 }
 
+void ParentBaseDeleteTest() {
+    struct ParentBaseTest : proxy::proxy_parent_base<ParentBaseTest> {};
+
+    // constructing a proxy parent base object
+    ParentBaseTest object;
+
+    // generating proxy pointers
+    auto pr1 = object.proxy();
+    auto pr2 = object.proxy();
+
+    // calling proxy_delete on one of the proxy generated
+    pr1.proxy_delete();
+
+    // checking value of proxy pointers
+    std::cout << "pr1.alive = " << pr1.alive() << std::endl;
+    std::cout << "pr1.ptr = " << pr1.get() << std::endl;
+    std::cout << "pr2.alive = " << pr2.alive() << std::endl;
+    std::cout << "pr2.ptr = " << pr2.get() << std::endl;
+}
+
 int main() {
     std::cout << "Starting the tests..." << std::endl;
 
@@ -221,7 +241,8 @@ int main() {
     // PrintSharedTest();
     // GetPtrTest();
     // GetHashTest();
-    InheritTest();
+    // InheritTest();
+    ParentBaseDeleteTest();
 
     std::cout << "All tests completed." << std::endl;
     std::getchar();
