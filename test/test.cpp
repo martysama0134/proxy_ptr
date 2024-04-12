@@ -74,7 +74,7 @@ void PrintTest() {
     std::cout << "root3 " << (root3.alive() ? "alive" : "expired") << std::endl;
 
     // still valid till here
-    root3.proxy_release();
+    root3.proxy_delete();
 
     std::cout << "root " << (root.alive() ? "alive" : "expired") << std::endl;
     std::cout << "root2 " << (root2.alive() ? "alive" : "expired") << std::endl;
@@ -117,7 +117,7 @@ void GetPtrTest() {
     auto root3 = root2;
     std::cout << "root ptr " << root.get() << std::endl;
 
-    root3.proxy_release();
+    root3.proxy_delete();
     std::cout << "root ptr " << root.get() << std::endl;
 }
 
@@ -214,18 +214,25 @@ void InheritTest() {
 }
 
 void ParentBaseDeleteTest() {
-    struct ParentBaseTest : proxy::proxy_parent_base<ParentBaseTest> {};
+    struct ParentBaseTest : proxy::enable_proxy_from_this<ParentBaseTest> {};
 
     // constructing a proxy parent base object
     ParentBaseTest object;
 
     // generating proxy pointers
-    auto pr1 = object.proxy();
-    auto pr2 = object.proxy();
+    auto pr1 = object.proxy_from_this();
+    auto pr2 = object.proxy_from_this();
 
     // calling proxy_delete on one of the proxy generated
     pr1.proxy_delete();
 
+    // checking value of proxy pointers
+    std::cout << "pr1.alive = " << pr1.alive() << std::endl;
+    std::cout << "pr1.ptr = " << pr1.get() << std::endl;
+    std::cout << "pr2.alive = " << pr2.alive() << std::endl;
+    std::cout << "pr2.ptr = " << pr2.get() << std::endl;
+
+    pr2.proxy_delete();
     // checking value of proxy pointers
     std::cout << "pr1.alive = " << pr1.alive() << std::endl;
     std::cout << "pr1.ptr = " << pr1.get() << std::endl;
@@ -242,7 +249,7 @@ int main() {
     // GetPtrTest();
     // GetHashTest();
     // InheritTest();
-    ParentBaseDeleteTest();
+    // ParentBaseDeleteTest();
 
     std::cout << "All tests completed." << std::endl;
     std::getchar();
