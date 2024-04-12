@@ -64,15 +64,15 @@ namespace proxy {
         template <class Ty>
         using deduce_ref_count_type = typename _deduce_ref_count_type<Ty>::type;
 
-        template <class Type, class AtomicType> class _proxy_common_state_base {
+        template <class AtomicType> class _proxy_common_state_base {
            protected:
             using ref_count_t = deduce_ref_count_type<AtomicType>;
-            Type* _ptr = nullptr;
+            void* _ptr = nullptr;
             ref_count_t _ref_count = static_cast<size_t>(0);
             bool _alive = false;
 
            public:
-            _proxy_common_state_base(Type* p) : _ptr(p) { _alive = true; }
+            _proxy_common_state_base(void* p) : _ptr(p) { _alive = true; }
 
             void inc_ref() { _ref_count++; }
             bool dec_ref() {
@@ -83,8 +83,8 @@ namespace proxy {
 
             bool alive() const { return _alive; }
             bool expired() const { return !alive(); }
-            Type* get() const { return _ptr; }
-            Type* release() {
+            void* get() const { return _ptr; }
+            void* release() {
                 _alive = false;
                 return _ptr;
             }
@@ -96,18 +96,18 @@ namespace proxy {
         template <class Type, class Dex, class AtomicType>
         class _proxy_common_state
             : private Dex,
-              public _proxy_common_state_base<Type, AtomicType> {
+              public _proxy_common_state_base<AtomicType> {
            public:
             _proxy_common_state(Type* ptr)
-                : _proxy_common_state_base<Type, AtomicType>(ptr) {}
+                : _proxy_common_state_base<AtomicType>(ptr) {}
             _proxy_common_state(Type* ptr, const Dex& dx)
-                : _proxy_common_state_base<Type, AtomicType>(ptr) {
+                : _proxy_common_state_base<AtomicType>(ptr) {
                 static_cast<Dex&>(*this) = dx;
             }
 
             void delete_ptr() {
                 if (this->_ptr && this->_alive) {
-                    static_cast<Dex&>(*this)(this->_ptr);
+                    static_cast<Dex&>(*this)(static_cast<Type*>(this->_ptr));
                     this->_alive = false;
                 }
             }
@@ -128,6 +128,13 @@ namespace proxy {
         template <class Ty>
         using extract_proxy_type =
             std::remove_pointer_t<extract_proxy_pointer_type<Ty>>;
+
+        template <class Type1, class Type2>
+        constexpr bool is_proxy_valid_cast =
+            std::is_base_of_v<Type1, Type2> ||
+            std::is_base_of_v<Type2, Type1> ||
+            std::is_same_v<Type1, std::remove_const_t<Type2>> ||
+            std::is_same_v<Type2, std::remove_const_t<Type1>>;
 
         template <class Ty>
         constexpr bool is_proxy_valid_type =
@@ -155,7 +162,11 @@ namespace proxy {
        public:
         using Type = detail::extract_proxy_type<_RTy>;
         using _common_PtrType =
-            detail::_proxy_common_state_base<Type, AtomicTypeFlag>;
+            detail::_proxy_common_state_base<AtomicTypeFlag>;
+
+        detail::_proxy_common_state_base<AtomicTypeFlag>* _state() const {
+            return _ppobj;
+        }
 
        protected:
         proxy_ptr(_common_PtrType* _ptr) {
@@ -163,6 +174,7 @@ namespace proxy {
             if (_ppobj)
                 _ppobj->inc_ref();
         }
+
 
        public:
         proxy_ptr() {}
@@ -180,6 +192,16 @@ namespace proxy {
             using common_ptr_type =
                 detail::_proxy_common_state<Type, Dex, AtomicTypeFlag>;
             _detach(new common_ptr_type(r, dx));
+        }
+
+        template <
+            class Type2,
+            std::enable_if_t<detail::is_proxy_valid_cast<Type, Type2>, int> = 0>
+        explicit proxy_ptr(Type* ptr,
+                           const proxy_ptr<Type2, AtomicTypeFlag>& other) {
+            assert(other._is_Pointing());
+            PROXY_PTR_UNUSED(ptr);
+            _detach(other._state());
         }
 
         explicit operator bool() const { return alive(); }
@@ -224,7 +246,7 @@ namespace proxy {
         Type* hashkey() const {
             if (!_is_Pointing())
                 return nullptr;
-            return _ppobj->get();
+            return static_cast<Type*>(_ppobj->get());
         }
 
         Type* get() const { return alive() ? hashkey() : nullptr; }
@@ -263,7 +285,7 @@ namespace proxy {
         Type* proxy_release() {
             if (!_is_Pointing())
                 return nullptr;
-            return _ppobj->release();
+            return static_cast<Type*>(_ppobj->release());
         }
 
         void proxy_delete() {
@@ -275,9 +297,7 @@ namespace proxy {
             return _is_Pointing() && _ppobj->alive() && _ppobj->get();
         }
 
-        bool expired() const {
-            return !alive();
-        }
+        bool expired() const { return !alive(); }
 
         ~proxy_ptr() { _detach(); }
 
@@ -302,12 +322,29 @@ namespace proxy {
         _common_PtrType* _ppobj = nullptr;
     };
 
+    template <class T, class U>
+    proxy::proxy_ptr<T> static_pointer_cast(
+        const proxy::proxy_ptr<U>& r) noexcept;
+
+    template <class T, class U>
+    proxy::proxy_ptr<T> dynamic_pointer_cast(
+        const proxy::proxy_ptr<U>& r) noexcept;
+
+    template <class T, class U>
+    proxy::proxy_ptr<T> const_pointer_cast(
+        const proxy::proxy_ptr<U>& r) noexcept;
+
+    template <class T, class U>
+    proxy::proxy_ptr<T> reinterpret_pointer_cast(
+        const proxy::proxy_ptr<U>& r) noexcept;
+
     template <class Type> class proxy_parent_base {
        public:
         proxy_ptr<Type> proxy() { return {_proxyPtr}; }
         proxy_ptr<Type> proxy_from_this() { return {_proxyPtr}; }
-        template <class Derived>
-        proxy_ptr<Derived> proxy_from_base() { return { proxy::static_pointer_cast<Derived>(_proxyPtr)}; }
+        template <class Derived> proxy_ptr<Derived> proxy_from_base() {
+            return {proxy::static_pointer_cast<Derived>(_proxyPtr)};
+        }
         void proxy_delete() {
             auto ret = _proxyPtr.proxy_release();
             _proxyPtr = static_cast<Type*>(this);
@@ -357,34 +394,34 @@ namespace proxy {
         }
     };
 
-    template<class T, class U>
-    proxy::proxy_ptr<T> static_pointer_cast(const proxy::proxy_ptr<U>& r) noexcept
-    {
+    template <class T, class U>
+    proxy::proxy_ptr<T> static_pointer_cast(
+        const proxy::proxy_ptr<U>& r) noexcept {
         auto p = static_cast<typename proxy::proxy_ptr<T>::Type*>(r.get());
-        return proxy::proxy_ptr<T>{p};
+        return proxy::proxy_ptr<T>{p, r};
     }
 
-    template<class T, class U>
-    proxy::proxy_ptr<T> dynamic_pointer_cast(const proxy::proxy_ptr<U>& r) noexcept
-    {
+    template <class T, class U>
+    proxy::proxy_ptr<T> dynamic_pointer_cast(
+        const proxy::proxy_ptr<U>& r) noexcept {
         if (auto p = dynamic_cast<typename proxy::proxy_ptr<T>::Type*>(r.get()))
-            return proxy::proxy_ptr<T>{p};
+            return proxy::proxy_ptr<T>{p, r};
         else
             return proxy::proxy_ptr<T>{};
     }
 
-    template<class T, class U>
-    proxy::proxy_ptr<T> const_pointer_cast(const proxy::proxy_ptr<U>& r) noexcept
-    {
+    template <class T, class U>
+    proxy::proxy_ptr<T> const_pointer_cast(
+        const proxy::proxy_ptr<U>& r) noexcept {
         auto p = const_cast<typename proxy::proxy_ptr<T>::Type*>(r.get());
-        return proxy::proxy_ptr<T>{p};
+        return proxy::proxy_ptr<T>{p, r};
     }
 
-    template<class T, class U>
-    proxy::proxy_ptr<T> reinterpret_pointer_cast(const proxy::proxy_ptr<U>& r) noexcept
-    {
+    template <class T, class U>
+    proxy::proxy_ptr<T> reinterpret_pointer_cast(
+        const proxy::proxy_ptr<U>& r) noexcept {
         auto p = reinterpret_cast<typename proxy::proxy_ptr<T>::Type*>(r.get());
-        return proxy::proxy_ptr<T>{p};
+        return proxy::proxy_ptr<T>{p, r};
     }
 
 }  // namespace proxy

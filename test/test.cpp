@@ -26,11 +26,11 @@ void execute_print_time(const std::string& name, int times, Func f) {
 }
 
 void BenchTest() {
-    #ifdef _DEBUG
+#ifdef _DEBUG
     constexpr auto TIMES = 2000;
-    #else
+#else
     constexpr auto TIMES = 20000;
-    #endif
+#endif
 
     execute_print_time("shared >> huge copy", TIMES, []() {
         auto root = std::make_shared<char[]>(100000);
@@ -94,17 +94,19 @@ void PrintSharedTest() {
 
     std::cout << "root " << (root ? "alive" : "expired") << std::endl;
     std::cout << "root2 " << (root2 ? "alive" : "expired") << std::endl;
-    std::cout << "root3 " << (!root3.expired() ? "alive" : "expired") << std::endl;
+    std::cout << "root3 " << (!root3.expired() ? "alive" : "expired")
+              << std::endl;
 
     std::cout << "root ptr " << root.get() << std::endl;
 
     // still valid till here
     root.reset();
     root2.reset();
-    
+
     std::cout << "root " << (root ? "alive" : "expired") << std::endl;
     std::cout << "root2 " << (root2 ? "alive" : "expired") << std::endl;
-    std::cout << "root3 " << (!root3.expired() ? "alive" : "expired") << std::endl;
+    std::cout << "root3 " << (!root3.expired() ? "alive" : "expired")
+              << std::endl;
 
     std::cout << "root ptr " << root.get() << std::endl;
 }
@@ -134,7 +136,7 @@ void GetHashTest() {
         std::cout << elem.hashkey() << " == " << elem.get() << std::endl;
 
     // unvalidate the 3rd proxy
-    auto elem3b = elem3; // copy
+    auto elem3b = elem3;  // copy
     std::cout << "unvalidating the ptrs..." << std::endl;
     elem3.proxy_delete();
 
@@ -142,14 +144,18 @@ void GetHashTest() {
         std::cout << elem.hashkey() << " == " << elem.get() << std::endl;
 
     if (elem3 == nullptr)
-        std::cout << "elem3 is null and returns true if compared to nullptr" << std::endl;
+        std::cout << "elem3 is null and returns true if compared to nullptr"
+                  << std::endl;
     else
-        std::cout << "BUG elem3 is null and returns false if compared to nullptr" << std::endl;
+        std::cout
+            << "BUG elem3 is null and returns false if compared to nullptr"
+            << std::endl;
 
     if (setList.contains(elem3))
         std::cout << "elem3 is null and is found inside setList" << std::endl;
     else
-        std::cout << "BUG elem3 is null and is not found inside setList" << std::endl;
+        std::cout << "BUG elem3 is null and is not found inside setList"
+                  << std::endl;
 
     // unvalidate all the proxies
     elem1.proxy_delete();
@@ -161,63 +167,60 @@ void GetHashTest() {
         std::cout << elem.hashkey() << " == " << elem.get() << std::endl;
 
     if (auto it = setList.find(elem1); it != setList.end())
-        std::cout << "elem1 is null and has been found! " << it->hashkey() << " == " << it->get() << std::endl;
+        std::cout << "elem1 is null and has been found! " << it->hashkey()
+                  << " == " << it->get() << std::endl;
     else
         std::cout << "BUG elem1 is null and has not been found!" << std::endl;
 
     if (auto it = setList.find(elem2); it != setList.end())
-        std::cout << "elem2 is null and has been found! " << it->hashkey() << " == " << it->get() << std::endl;
+        std::cout << "elem2 is null and has been found! " << it->hashkey()
+                  << " == " << it->get() << std::endl;
     else
         std::cout << "BUG elem2 is null and has not been found!" << std::endl;
 
     if (auto it = setList.find(elem3); it != setList.end())
-        std::cout << "elem3 is null and has been found! " << it->hashkey() << " == " << it->get() << std::endl;
+        std::cout << "elem3 is null and has been found! " << it->hashkey()
+                  << " == " << it->get() << std::endl;
     else
         std::cout << "BUG elem3 is null and has not been found!" << std::endl;
 
     if (auto it = setList.find(elem4); it != setList.end())
-        std::cout << "elem4 is null and has been found! " << it->hashkey() << " == " << it->get() << std::endl;
+        std::cout << "elem4 is null and has been found! " << it->hashkey()
+                  << " == " << it->get() << std::endl;
     else
         std::cout << "BUG elem4 is null and has not been found!" << std::endl;
 }
 
-class BaseShared : public std::enable_shared_from_this<BaseShared> {
+class BaseProxyTest {
    public:
-    auto smth() { return shared_from_this(); }
+    virtual ~BaseProxyTest() { std::cout << "~BaseProxyTest" << std::endl; }
 };
-
-class DerivedShared : public BaseShared {
+class DerivedProxyTest : public BaseProxyTest {
    public:
-    auto smth() { return std::static_pointer_cast<DerivedShared>(shared_from_this()); }
-};
-
-class BaseProxy : public proxy::enable_proxy_from_this<BaseProxy> {
-   public:
-    auto smth() { return proxy_from_this(); }
-};
-
-class DerivedProxy : public BaseProxy {
-
+    ~DerivedProxyTest() { std::cout << "~DerivedProxyTest" << std::endl; }
 };
 
 void InheritTest() {
-    auto derived = proxy::make_proxy<DerivedProxy>();
-    auto derived2 = derived->proxy_from_this();
-    //auto derived3 = derived->proxy_from_base<DerivedProxy>(); //todo kaboom missing reference sharing
-
-    std::cout << "derived " << derived.hashkey() << " == " << derived.get() << std::endl;
-    std::cout << "derived2 " << derived2.hashkey() << " == " << derived2.get() << std::endl;
-    //std::cout << "derived3 " << derived3.hashkey() << " == " << derived3.get() << std::endl;
+    auto derived = proxy::make_proxy<DerivedProxyTest>();
+    auto derived2 =
+        proxy::static_pointer_cast<BaseProxyTest>(derived);  // todo kaboom
+    derived2.proxy_delete();
+    // it must call both destructor
+    // checking derived is no longer alive
+    if (!derived)
+        std::cout << "derived is no longer alive." << std::endl;
+    if (!derived2)
+        std::cout << "derived2 is no longer alive." << std::endl;
 }
 
 int main() {
     std::cout << "Starting the tests..." << std::endl;
 
-    //BenchTest();
-    //PrintTest();
-    //PrintSharedTest();
-    //GetPtrTest();
-    //GetHashTest();
+    // BenchTest();
+    // PrintTest();
+    // PrintSharedTest();
+    // GetPtrTest();
+    // GetHashTest();
     InheritTest();
 
     std::cout << "All tests completed." << std::endl;
