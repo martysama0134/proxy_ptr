@@ -40,6 +40,7 @@ namespace proxy {
 
     // forward declaration
     template <class Ty> class proxy_parent_base;
+    template <typename Ty> using enable_proxy_from_this = proxy_parent_base<Ty>;
 
     namespace detail {
         template <class... args> using void_t = void;
@@ -303,6 +304,7 @@ namespace proxy {
     template <class Type> class proxy_parent_base {
        public:
         proxy_ptr<Type> proxy() { return {_proxyPtr}; }
+        proxy_ptr<Type> proxy_from_this() { return {_proxyPtr}; }
         void proxy_delete() {
             auto ret = _proxyPtr.proxy_release();
             _proxyPtr = static_cast<Type*>(this);
