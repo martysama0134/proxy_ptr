@@ -293,20 +293,20 @@ void ValidInheritTest() {
               << std::endl;
     std::cout << "derived ptr " << derived.get() << " alive " << derived.alive()
               << std::endl;
-    std::cout << "base ptr " << base.get() << " alive " << derived.alive()
+    std::cout << "base ptr " << base.get() << " alive " << base.alive()
               << std::endl;
     std::cout << "rederived ptr " << rederived.get() << " alive "
-              << derived.alive() << std::endl;
+              << rederived.alive() << std::endl;
 
     // destroying the second node of proxy
     derived.proxy_delete();
     std::cout << "\nexpecting all of them are no longer alive:" << std::endl;
     std::cout << "derived ptr " << derived.get() << " alive " << derived.alive()
               << std::endl;
-    std::cout << "base ptr " << base.get() << " alive " << derived.alive()
+    std::cout << "base ptr " << base.get() << " alive " << base.alive()
               << std::endl;
     std::cout << "rederived ptr " << rederived.get() << " alive "
-              << derived.alive() << std::endl;
+              << rederived.alive() << std::endl;
 }
 
 int main() {
