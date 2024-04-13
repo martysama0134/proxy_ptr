@@ -89,8 +89,13 @@ namespace proxy {
                 return _ptr;
             }
 
+            virtual bool is_weak() const = 0;
             virtual void delete_ptr() = 0;
             virtual ~_proxy_common_state_base() {}
+        };
+
+        template <class Type> struct non_deleter {
+            void operator()(Type* ptr) noexcept {}
         };
 
         template <class Type, class Dex, class AtomicType>
@@ -105,17 +110,17 @@ namespace proxy {
                 static_cast<Dex&>(*this) = dx;
             }
 
-            void delete_ptr() {
+            bool is_weak() const {
+                using WeakDeleter = detail::non_deleter<Type>;
+                return std::is_same_v<Dex, WeakDeleter>;
+            }
+            void delete_ptr() override {
                 if (this->_ptr && this->_alive) {
                     static_cast<Dex&>(*this)(static_cast<Type*>(this->_ptr));
                     this->_alive = false;
                 }
             }
             virtual ~_proxy_common_state() { delete_ptr(); }
-        };
-
-        template <class Type> struct non_deleter {
-            void operator()(Type* ptr) noexcept {}
         };
 
         template <class Ty> struct _extract_proxy_pointer_type {
@@ -301,6 +306,8 @@ namespace proxy {
         }
 
         bool expired() const { return !alive(); }
+
+        bool _is_weakref() const { return _ppobj && _ppobj->is_weak(); }
 
         ~proxy_ptr() { _detach(); }
 

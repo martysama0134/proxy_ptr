@@ -321,8 +321,7 @@ class CharacterTest : public EntityTest {
    public:
     std::string subname;
     int subid;
-    CharacterTest(std::string _name, int _id, std::string _subname,
-                     int _subid)
+    CharacterTest(std::string _name, int _id, std::string _subname, int _subid)
         : EntityTest(_name, _id), subname(_subname), subid(_subid) {}
 };
 
@@ -335,11 +334,11 @@ void FullNodeInheritTest() {
         entity.proxy_delete();
 
         std::cout << "character ptr " << character.get() << " hashkey "
-                  << character.hashkey() << " alive "
-                  << character.alive() << std::endl;
+                  << character.hashkey() << " alive " << character.alive()
+                  << std::endl;
         std::cout << "entity ptr " << entity.get() << " hashkey "
-                  << entity.hashkey() << " alive "
-                  << entity.alive() << std::endl;
+                  << entity.hashkey() << " alive " << entity.alive()
+                  << std::endl;
     }
 
     {
@@ -351,17 +350,24 @@ void FullNodeInheritTest() {
         base.proxy_delete();
 
         std::cout << "character ptr " << character.get() << " hashkey "
-                  << character.hashkey() << " alive "
-                  << character.alive() << std::endl;
+                  << character.hashkey() << " alive " << character.alive()
+                  << std::endl;
         std::cout << "entity ptr " << entity.get() << " hashkey "
                   << entity.hashkey() << " alive " << entity.alive()
                   << std::endl;
-        std::cout << "base ptr " << base.get() << " hashkey "
-                  << base.hashkey() << " alive " << base.alive()
-                  << std::endl;
+        std::cout << "base ptr " << base.get() << " hashkey " << base.hashkey()
+                  << " alive " << base.alive() << std::endl;
     }
 }
 
+void DebuggingWeakrefTest() {
+    auto ptr = proxy::make_proxy<EntityTest>();
+    auto weakptr = ptr->proxy_from_this();
+
+    std::cout << "expecting 0-1" << std::endl;
+    std::cout << "result: " << ptr._is_weakref() << "-" << weakptr._is_weakref()
+              << std::endl;
+}
 
 int main() {
     std::cout << "Starting the tests..." << std::endl;
@@ -374,7 +380,8 @@ int main() {
     // InheritTest();
     // ParentBaseDeleteTest();
     // ValidInheritTest();
-    FullNodeInheritTest();
+    // FullNodeInheritTest();
+    DebuggingWeakrefTest();
 
     std::cout << "All tests completed." << std::endl;
     std::getchar();
