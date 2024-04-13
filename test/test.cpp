@@ -264,31 +264,50 @@ class ValidDerivedTest : public ValidBaseTest {
    public:
     std::string subname;
     int subid;
-    ValidDerivedTest(std::string _name, int _id, std::string _subname, int _subid) : ValidBaseTest(_name, _id), subname(_subname), subid(_subid) {}
+    ValidDerivedTest(std::string _name, int _id, std::string _subname,
+                     int _subid)
+        : ValidBaseTest(_name, _id), subname(_subname), subid(_subid) {}
 };
 
 void ValidInheritTest() {
-    auto derived = proxy::make_proxy<ValidDerivedTest>("mname", 111, "msubname", 222);
+    auto derived =
+        proxy::make_proxy<ValidDerivedTest>("mname", 111, "msubname", 222);
     auto base = derived->proxy_from_this();
-
-    std::cout << "derived ptr " << derived.get() << " name " << derived->name << " id " << derived->id << " subname " << derived->subname << " subid " << derived->subid << std::endl;
-
-    std::cout << "base ptr " << derived.get() << " name " << derived->name << " id " << derived->id << std::endl;
-
     auto rederived = derived->proxy_from_base<ValidDerivedTest>();
-    std::cout << "rederived ptr " << rederived.get() << " name " << rederived->name << " id " << rederived->id << " subname " << rederived->subname << " subid " << rederived->subid << std::endl;
 
-    // invalidate the ptrs
-    //derived.proxy_delete();   //ok
-    //base.proxy_delete();      //kaboom still alive - derived not nullptr
-    rederived.proxy_delete();   //kaboom still alive - derived not nullptr
-    std::cout << "derived ptr " << derived.get() << " alive " << derived.alive() << std::endl;
-    std::cout << "base ptr " << base.get() << " alive " << derived.alive() << std::endl;
-    std::cout << "rederived ptr " << rederived.get() << " alive " << derived.alive() << std::endl;
+    std::cout << "\nexpecting they are all alive and valid:" << std::endl;
+    std::cout << "derived ptr " << derived.get() << " name " << derived->name
+              << " id " << derived->id << " subname " << derived->subname
+              << " subid " << derived->subid << std::endl;
+    std::cout << "base ptr " << derived.get() << " name " << derived->name
+              << " id " << derived->id << std::endl;
+    std::cout << "rederived ptr " << rederived.get() << " name "
+              << rederived->name << " id " << rederived->id << " subname "
+              << rederived->subname << " subid " << rederived->subid
+              << std::endl;
+
+    // destroying first node of proxy
+    rederived.proxy_delete();
+    std::cout << "\nexpecting derived has a value while base and rederived are "
+                 "no longer alive :"
+              << std::endl;
+    std::cout << "derived ptr " << derived.get() << " alive " << derived.alive()
+              << std::endl;
+    std::cout << "base ptr " << base.get() << " alive " << derived.alive()
+              << std::endl;
+    std::cout << "rederived ptr " << rederived.get() << " alive "
+              << derived.alive() << std::endl;
+
+    // destroying the second node of proxy
+    derived.proxy_delete();
+    std::cout << "\nexpecting all of them are no longer alive:" << std::endl;
+    std::cout << "derived ptr " << derived.get() << " alive " << derived.alive()
+              << std::endl;
+    std::cout << "base ptr " << base.get() << " alive " << derived.alive()
+              << std::endl;
+    std::cout << "rederived ptr " << rederived.get() << " alive "
+              << derived.alive() << std::endl;
 }
-
-
-
 
 int main() {
     std::cout << "Starting the tests..." << std::endl;
