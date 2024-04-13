@@ -214,30 +214,42 @@ void InheritTest() {
 }
 
 void ParentBaseDeleteTest() {
-    struct ParentBaseTest : proxy::enable_proxy_from_this<ParentBaseTest> {};
+    struct ParentBaseTest : proxy::proxy_parent_base<ParentBaseTest> {};
+    struct DerivedTest : ParentBaseTest {};
 
     // constructing a proxy parent base object
-    ParentBaseTest object;
+    {
+        DerivedTest object;
 
-    // generating proxy pointers
-    auto pr1 = object.proxy_from_this();
-    auto pr2 = object.proxy_from_this();
+        // generating proxy pointers
+        auto pr1 = object.proxy();
+        auto pr2 = object.proxy();
+        auto pr3 = object.proxy_from_base<DerivedTest>();
 
-    // calling proxy_delete on one of the proxy generated
-    pr1.proxy_delete();
+        // calling proxy_delete on one of the proxy generated
+        pr1.proxy_delete();
 
-    // checking value of proxy pointers
-    std::cout << "pr1.alive = " << pr1.alive() << std::endl;
-    std::cout << "pr1.ptr = " << pr1.get() << std::endl;
-    std::cout << "pr2.alive = " << pr2.alive() << std::endl;
-    std::cout << "pr2.ptr = " << pr2.get() << std::endl;
+        // checking value of proxy pointers
+        std::cout << "pr1.alive = " << pr1.alive() << std::endl;
+        std::cout << "pr1.ptr = " << pr1.get() << std::endl;
+        std::cout << "pr2.alive = " << pr2.alive() << std::endl;
+        std::cout << "pr2.ptr = " << pr2.get() << std::endl;
+        std::cout << "pr3.alive = " << pr3.alive() << std::endl;
+        std::cout << "pr3.ptr = " << pr3.get() << std::endl;
+    }
 
-    pr2.proxy_delete();
-    // checking value of proxy pointers
-    std::cout << "pr1.alive = " << pr1.alive() << std::endl;
-    std::cout << "pr1.ptr = " << pr1.get() << std::endl;
-    std::cout << "pr2.alive = " << pr2.alive() << std::endl;
-    std::cout << "pr2.ptr = " << pr2.get() << std::endl;
+    // checking for proxy_from_this
+    {
+        std::cout << "\n\nsecond test:" << std::endl;
+        auto derived = proxy::make_proxy<DerivedTest>();
+        auto base = derived->proxy_from_this();
+        base.proxy_delete();
+
+        std::cout << "derived.alive " << derived.alive() << std::endl;
+        std::cout << "derived.ptr " << derived.get() << std::endl;
+        std::cout << "base.alive " << base.alive() << std::endl;
+        std::cout << "base.ptr " << base.get() << std::endl;
+    }
 }
 
 class ValidBaseTest : public proxy::enable_proxy_from_this<ValidBaseTest> {
