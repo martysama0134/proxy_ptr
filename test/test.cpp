@@ -309,6 +309,60 @@ void ValidInheritTest() {
               << rederived.alive() << std::endl;
 }
 
+class EntityTest : public proxy::enable_proxy_from_this<EntityTest> {
+   public:
+    std::string name;
+    int id;
+    EntityTest() : name("NONAME"), id(123) {}
+    EntityTest(std::string _name, int _id) : name(_name), id(_id) {}
+};
+
+class CharacterTest : public EntityTest {
+   public:
+    std::string subname;
+    int subid;
+    CharacterTest(std::string _name, int _id, std::string _subname,
+                     int _subid)
+        : EntityTest(_name, _id), subname(_subname), subid(_subid) {}
+};
+
+void FullNodeInheritTest() {
+    {
+        auto character =
+            proxy::make_proxy<CharacterTest>("mname", 111, "msubname", 222);
+        auto entity = proxy::static_pointer_cast<EntityTest>(character);
+
+        entity.proxy_delete();
+
+        std::cout << "character ptr " << character.get() << " hashkey "
+                  << character.hashkey() << " alive "
+                  << character.alive() << std::endl;
+        std::cout << "entity ptr " << entity.get() << " hashkey "
+                  << entity.hashkey() << " alive "
+                  << entity.alive() << std::endl;
+    }
+
+    {
+        auto character =
+            proxy::make_proxy<CharacterTest>("mname", 111, "msubname", 222);
+        auto entity = proxy::static_pointer_cast<EntityTest>(character);
+
+        auto base = entity->proxy_from_this();
+        base.proxy_delete();
+
+        std::cout << "character ptr " << character.get() << " hashkey "
+                  << character.hashkey() << " alive "
+                  << character.alive() << std::endl;
+        std::cout << "entity ptr " << entity.get() << " hashkey "
+                  << entity.hashkey() << " alive " << entity.alive()
+                  << std::endl;
+        std::cout << "base ptr " << base.get() << " hashkey "
+                  << base.hashkey() << " alive " << base.alive()
+                  << std::endl;
+    }
+}
+
+
 int main() {
     std::cout << "Starting the tests..." << std::endl;
 
@@ -319,7 +373,8 @@ int main() {
     // GetHashTest();
     // InheritTest();
     // ParentBaseDeleteTest();
-    ValidInheritTest();
+    // ValidInheritTest();
+    FullNodeInheritTest();
 
     std::cout << "All tests completed." << std::endl;
     std::getchar();
