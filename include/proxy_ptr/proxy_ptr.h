@@ -110,7 +110,7 @@ namespace proxy {
                 static_cast<Dex&>(*this) = dx;
             }
 
-            bool is_weak() const {
+            bool is_weak() const override {
                 using WeakDeleter = detail::non_deleter<Type>;
                 return std::is_same_v<Dex, WeakDeleter>;
             }
