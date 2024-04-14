@@ -369,6 +369,48 @@ void DebuggingWeakrefTest() {
               << std::endl;
 }
 
+
+
+class PartyTest;
+class CharLinkTest {
+   public:
+    proxy::proxy_ptr<PartyTest> party;
+};
+
+class PartyTest : public proxy::enable_proxy_from_this<PartyTest> {
+   public:
+    void Link(proxy::proxy_ptr<CharLinkTest> ch) {
+        ch->party = proxy_from_this();
+        std::cout << "INLINK ptr " << ch->party.get() << " hashkey "
+                  << ch->party.hashkey() << " alive " << ch->party.alive()
+                  << std::endl;
+
+    }
+};
+
+void LinkedRefTest() {
+    auto ch = proxy::make_proxy<CharLinkTest>();
+    {
+        auto party = proxy::make_proxy<PartyTest>();
+        std::cout << "REAL ptr " << party.get() << " hashkey "
+                  << party.hashkey() << " alive " << party.alive() << std::endl;
+
+        party->Link(ch);
+
+        std::cout << "INSIDE ptr " << ch->party.get() << " hashkey "
+                  << ch->party.hashkey() << " alive " << ch->party.alive()
+                  << std::endl;
+
+        std::cout << "REAL ptr " << party.get() << " hashkey "
+                  << party.hashkey() << " alive " << party.alive() << std::endl;
+    }
+    std::cout << "OUTSIDE ptr " << ch->party.get() << " hashkey "
+              << ch->party.hashkey() << " alive " << ch->party.alive()
+              << std::endl;
+}
+
+
+
 int main() {
     std::cout << "Starting the tests..." << std::endl;
 
@@ -381,7 +423,8 @@ int main() {
     // ParentBaseDeleteTest();
     // ValidInheritTest();
     // FullNodeInheritTest();
-    DebuggingWeakrefTest();
+    // DebuggingWeakrefTest();
+    LinkedRefTest();
 
     std::cout << "All tests completed." << std::endl;
     std::getchar();
