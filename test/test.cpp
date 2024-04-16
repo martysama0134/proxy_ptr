@@ -157,15 +157,15 @@ bool TestOwnerThreadSafe() {
 
                     // trying to delete via owner
                     if (RandomInt(0, 10000) == 5) {
-                        std::cout << "deleting via owner: thread id " << index
-                                  << std::endl;
+                        /*std::cout << "deleting via owner: thread id " << index
+                                  << std::endl;*/
                         owner.owner_delete();
                     }
 
                     // trying to delete via weak
                     else if (RandomInt(0, 10000) == 6) {
-                        std::cout << "deleting via weak: thread id " << index
-                                  << std::endl;
+                        /*std::cout << "deleting via weak: thread id " << index
+                                  << std::endl;*/
                         if (auto temp_owner = owner::get_ownership(weak))
                             temp_owner.owner_delete();
                     }
