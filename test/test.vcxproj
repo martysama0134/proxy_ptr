@@ -146,7 +146,8 @@
     <ClCompile Include="test.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\include\proxy_ptr\proxy_ptr.h" />
+    <ClInclude Include="..\include\owner\owner.h" />
+    <ClInclude Include="..\include\owner\owner_ts.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
