@@ -409,6 +409,25 @@ void LinkedRefTest() {
               << std::endl;
 }
 
+class RawMemoryClass : public proxy::enable_proxy_from_this<RawMemoryClass> {
+   public:
+    std::string name;
+    RawMemoryClass(std::string _name) : name(_name) {}
+};
+
+
+void RawMemoryTest() {
+    proxy::proxy_ptr<RawMemoryClass> proxy;
+
+    auto obj = new RawMemoryClass("Thicc");
+    proxy = obj->proxy_from_this();
+    std::cout << "INSIDE ptr " << proxy.get() << " hashkey "
+                << proxy.hashkey() << " alive " << proxy.alive() << std::endl;
+    delete obj;
+
+    std::cout << "OUTSIDE ptr " << proxy.get() << " hashkey " << proxy.hashkey()
+              << " alive " << proxy.alive() << std::endl;
+}
 
 
 int main() {
@@ -424,7 +443,8 @@ int main() {
     // ValidInheritTest();
     // FullNodeInheritTest();
     // DebuggingWeakrefTest();
-    LinkedRefTest();
+    // LinkedRefTest();
+    RawMemoryTest();
 
     std::cout << "All tests completed." << std::endl;
     std::getchar();
