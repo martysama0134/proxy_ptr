@@ -1,3 +1,6 @@
+### New design version available elsewhere
+The new owner_ptr, weak_ptr, proxy_ptr version can be found here: https://github.com/IkarusDeveloper/cake
+
 ### `proxy::proxy_parent_base`
 A proxy generator wrapper class. It can be used to wrap a class in order to inherit `proxy_parent_base` methods.
 
