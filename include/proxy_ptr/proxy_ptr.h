@@ -188,6 +188,9 @@ namespace proxy {
         proxy_ptr() {}
         proxy_ptr(std::nullptr_t) {}
         proxy_ptr(const proxy_ptr& n) { _proxy_from(n); }
+        proxy_ptr(proxy_ptr&& other) noexcept : _ppobj(other._ppobj) {
+            other._ppobj = nullptr;
+        }
         explicit proxy_ptr(Type* r) {
             using deleter_type = std::default_delete<Type>;
             using common_ptr_type =
@@ -285,6 +288,16 @@ namespace proxy {
             return (*this);
         }
 
+        proxy_ptr& operator=(proxy_ptr&& other) noexcept {
+            if (this != &other) {
+                if (_ppobj && !_ppobj->dec_ref())
+                    delete _ppobj;
+                _ppobj = other._ppobj;
+                other._ppobj = nullptr;
+            }
+            return *this;
+        }
+
         decltype(auto) operator=(std::nullptr_t) {
             _detach();
             return (*this);
@@ -294,11 +307,6 @@ namespace proxy {
             if (!_is_Pointing())
                 return nullptr;
             return static_cast<Type*>(_ppobj->release());
-        }
-
-        void proxy_delete() {
-            if (_is_Pointing())
-                _ppobj->delete_ptr();
         }
 
         bool alive() const {
@@ -332,6 +340,51 @@ namespace proxy {
         _common_PtrType* _ppobj = nullptr;
     };
 
+    // Move-only owning proxy: the only type that exposes proxy_delete().
+    // Inherits all observer functionality from proxy_ptr.
+    // Implicit conversion to proxy_ptr<T> (observer) works via base-class binding.
+    template <class _RTy, class AtomicTypeFlag = proxy_non_atomic,
+              class = detail::enable_valid_atomic_flag<AtomicTypeFlag>>
+    class proxy_owner_ptr : public proxy_ptr<_RTy, AtomicTypeFlag> {
+        using base = proxy_ptr<_RTy, AtomicTypeFlag>;
+
+       public:
+        using Type = typename base::Type;
+
+        proxy_owner_ptr() = default;
+        proxy_owner_ptr(std::nullptr_t) {}
+
+        // Move-only: no copy
+        proxy_owner_ptr(const proxy_owner_ptr&) = delete;
+        proxy_owner_ptr& operator=(const proxy_owner_ptr&) = delete;
+
+        proxy_owner_ptr(proxy_owner_ptr&& other) noexcept
+            : base(std::move(static_cast<base&>(other))) {}
+
+        proxy_owner_ptr& operator=(proxy_owner_ptr&& other) noexcept {
+            base::operator=(std::move(static_cast<base&>(other)));
+            return *this;
+        }
+
+        proxy_owner_ptr& operator=(std::nullptr_t) {
+            base::operator=(nullptr);
+            return *this;
+        }
+
+        // Owning constructors (raw pointer with default or custom deleter)
+        explicit proxy_owner_ptr(Type* r) : base(r) {}
+
+        template <class Dex,
+                  std::enable_if_t<detail::is_valid_deleter<Type, Dex>, int> = 0>
+        explicit proxy_owner_ptr(Type* r, const Dex& dx) : base(r, dx) {}
+
+        // The ONLY place proxy_delete() exists in the entire system
+        void proxy_delete() {
+            if (this->_is_Pointing())
+                this->_state()->delete_ptr();
+        }
+    };
+
     template <class T, class U>
     proxy::proxy_ptr<T> static_pointer_cast(
         const proxy::proxy_ptr<U>& r) noexcept;
@@ -356,48 +409,48 @@ namespace proxy {
             return {proxy::static_pointer_cast<Derived>(_proxyPtr)};
         }
         void proxy_delete() {
-            auto ret = _proxyPtr.proxy_release();
-            _proxyPtr = static_cast<Type*>(this);
+            _proxyPtr.proxy_delete();  // non_deleter: no-op on memory, sets _alive=false
         }
         virtual ~proxy_parent_base() { _proxyPtr.proxy_delete(); }
 
        private:
-        proxy_ptr<Type> _proxyPtr{static_cast<Type*>(this),
-                                  detail::non_deleter<Type>()};
+        proxy_owner_ptr<Type> _proxyPtr{static_cast<Type*>(this),
+                                        detail::non_deleter<Type>()};
     };
 
     namespace detail {
         template <class Ty, class Atomic> struct make_proxy {
             template <class... args>
-            static proxy_ptr<Ty, Atomic> construct(const args&... va) {
-                return proxy_ptr<Ty, Atomic>{new Ty(va...)};
+            static proxy_owner_ptr<Ty, Atomic> construct(const args&... va) {
+                return proxy_owner_ptr<Ty, Atomic>{new Ty(va...)};
             }
         };
 
         template <class Ty, class Atomic> struct make_proxy<Ty[], Atomic> {
-            static proxy_ptr<Ty[], Atomic> construct(size_t len) {
-                return proxy_ptr<Ty[], Atomic>{new Ty[len]};
+            static proxy_owner_ptr<Ty[], Atomic> construct(size_t len) {
+                return proxy_owner_ptr<Ty[], Atomic>{new Ty[len]};
             }
         };
     }  // namespace detail
 
     template <class Ty, class... Args>
-    std::enable_if_t<detail::is_proxy_valid_type<Ty>, proxy_ptr<Ty>> make_proxy(
-        const Args&... Arguments) {
+    std::enable_if_t<detail::is_proxy_valid_type<Ty>, proxy_owner_ptr<Ty>>
+    make_proxy(const Args&... Arguments) {
         return detail::make_proxy<Ty, proxy_non_atomic>::construct(
             Arguments...);
     }
 
     template <class Ty, class... Args>
     std::enable_if_t<detail::is_proxy_valid_type<Ty>,
-                     proxy_ptr<Ty, proxy_atomic>>
+                     proxy_owner_ptr<Ty, proxy_atomic>>
     make_proxy_atomic(const Args&... Arguments) {
         return detail::make_proxy<Ty, proxy_atomic>::construct(Arguments...);
     }
 
     template <class Type, class AtomicType> struct proxy_factory {
         template <class... args>
-        static proxy::proxy_ptr<Type, AtomicType> make(const args&... arg) {
+        static proxy::proxy_owner_ptr<Type, AtomicType> make(
+            const args&... arg) {
             return detail::make_proxy<Type, AtomicType>::construct(arg...);
         }
     };
