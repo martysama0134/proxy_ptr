@@ -1,453 +1,358 @@
-#include "../include/proxy_ptr/proxy_ptr.h"
-#include <iostream>
-#include <chrono>
-#include <array>
+#include <doctest/doctest.h>
+#include <proxy_ptr/proxy_ptr.h>
+
 #include <set>
+#include <string>
 #include <unordered_set>
-#include <thread>
 
-double get_time() {
-    return std::chrono::duration<double>(
-               std::chrono::high_resolution_clock::now().time_since_epoch())
-        .count();
+// ── Basic lifecycle ─────────────────────────────────────────────────────────
+
+TEST_CASE("proxy_owner_ptr creates and deletes") {
+    auto owner = proxy::make_proxy<std::string>("hello");
+    CHECK(owner.alive());
+    CHECK(*owner.get() == "hello");
+
+    owner.proxy_delete();
+    CHECK(owner.expired());
+    CHECK(owner.get() == nullptr);
 }
 
-template <class Func>
-void execute_print_time(const std::string& name, int times, Func f) {
-    auto start = get_time();
-    // executing
-    for (int i = 0; i < times; i++)
-        f();
+TEST_CASE("proxy_ptr observes owner lifetime") {
+    auto owner = proxy::make_proxy<std::string>("monkey");
+    proxy::proxy_ptr<std::string> obs = owner;
 
-    // getting execution time
-    auto end = get_time();
-    auto time = end - start;
-    std::cout << name << ": finish in " << time << std::endl;
+    CHECK(obs.alive());
+    CHECK(*obs.get() == "monkey");
+
+    owner.proxy_delete();
+    CHECK(obs.expired());
+    CHECK(obs.get() == nullptr);
 }
 
-void BenchTest() {
-#ifdef _DEBUG
-    constexpr auto TIMES = 2000;
-#else
-    constexpr auto TIMES = 20000;
-#endif
+TEST_CASE("multiple observers share state") {
+    auto owner = proxy::make_proxy<std::string>("shared");
+    proxy::proxy_ptr<std::string> a = owner;
+    proxy::proxy_ptr<std::string> b = a;
+    proxy::proxy_ptr<std::string> c = b;
 
-    execute_print_time("shared >> huge copy", TIMES, []() {
-        auto root = std::make_shared<char[]>(100000);
-        for (int i = 0; i < 100000; i++)
-            if (auto copy = root)
-                if (copy.get() != root.get())
-                    std::cout << "what the hell\n";
-        return root.get();
-    });
+    CHECK(a.alive());
+    CHECK(b.alive());
+    CHECK(c.alive());
+    CHECK(a.get() == b.get());
+    CHECK(b.get() == c.get());
 
-    execute_print_time("proxy >> huge copy", TIMES, []() {
-        auto root = proxy::make_proxy<char[]>(100000);
-        for (int i = 0; i < 100000; i++)
-            if (auto copy = root)
-                if (copy.hashkey() != root.hashkey())
-                    std::cout << "what the hell\n";
-        return root.hashkey();
-    });
-
-    execute_print_time("proxy atomic >> huge copy", TIMES, []() {
-        auto root = proxy::make_proxy_atomic<char[]>(100000);
-        for (int i = 0; i < 100000; i++)
-            if (auto copy = root)
-                if (copy.hashkey() != root.hashkey())
-                    std::cout << "what the hell\n";
-        return root.hashkey();
-    });
+    owner.proxy_delete();
+    CHECK(a.expired());
+    CHECK(b.expired());
+    CHECK(c.expired());
 }
 
-void PrintTest() {
-    std::cout << "monkey==" << std::endl;
-    auto root = proxy::make_proxy<std::string>("monkey");
-    auto root2 = root;
-    auto root3 = root2;
-    std::cout << *root.hashkey() << std::endl;
-    std::cout << *root2.hashkey() << std::endl;
-    std::cout << *root3.hashkey() << std::endl;
-    printf("%s\n", root3.hashkey()->c_str());
-    std::cout << "root " << (root.alive() ? "alive" : "expired") << std::endl;
-    std::cout << "root2 " << (root2.alive() ? "alive" : "expired") << std::endl;
-    std::cout << "root3 " << (root3.alive() ? "alive" : "expired") << std::endl;
+TEST_CASE("proxy_owner_ptr is move-only") {
+    auto a = proxy::make_proxy<int>(42);
+    auto raw = a.get();
 
-    // still valid till here
-    root3.proxy_delete();
-
-    std::cout << "root " << (root.alive() ? "alive" : "expired") << std::endl;
-    std::cout << "root2 " << (root2.alive() ? "alive" : "expired") << std::endl;
-    std::cout << "root3 " << (root3.alive() ? "alive" : "expired") << std::endl;
+    auto b = std::move(a);
+    CHECK(b.alive());
+    CHECK(b.get() == raw);
+    CHECK_FALSE(a.alive());  // moved-from
 }
 
-void PrintSharedTest() {
-    std::cout << "monkey==" << std::endl;
-    auto root = std::make_shared<std::string>("monkey");
-    auto root2 = root;
-    std::weak_ptr<std::string> root3 = root2;
+TEST_CASE("proxy_ptr copy keeps both alive") {
+    auto owner = proxy::make_proxy<int>(10);
+    proxy::proxy_ptr<int> a = owner;
+    proxy::proxy_ptr<int> b = a;
 
-    std::cout << *root.get() << std::endl;
-    std::cout << *root2.get() << std::endl;
-    std::cout << *root3.lock() << std::endl;
-    printf("%s\n", root.get()->c_str());
-
-    std::cout << "root " << (root ? "alive" : "expired") << std::endl;
-    std::cout << "root2 " << (root2 ? "alive" : "expired") << std::endl;
-    std::cout << "root3 " << (!root3.expired() ? "alive" : "expired")
-              << std::endl;
-
-    std::cout << "root ptr " << root.get() << std::endl;
-
-    // still valid till here
-    root.reset();
-    root2.reset();
-
-    std::cout << "root " << (root ? "alive" : "expired") << std::endl;
-    std::cout << "root2 " << (root2 ? "alive" : "expired") << std::endl;
-    std::cout << "root3 " << (!root3.expired() ? "alive" : "expired")
-              << std::endl;
-
-    std::cout << "root ptr " << root.get() << std::endl;
+    CHECK(a.alive());
+    CHECK(b.alive());
+    CHECK(a.get() == b.get());
 }
 
-void GetPtrTest() {
-    auto root = proxy::make_proxy<std::string>("monkey");
-    auto root2 = root;
-    auto root3 = root2;
-    std::cout << "root ptr " << root.get() << std::endl;
+// ── Null / default state ────────────────────────────────────────────────────
 
-    root3.proxy_delete();
-    std::cout << "root ptr " << root.get() << std::endl;
+TEST_CASE("default-constructed proxy_ptr is expired") {
+    proxy::proxy_ptr<int> p;
+    CHECK(p.expired());
+    CHECK(p.get() == nullptr);
+    CHECK(p.hashkey() == nullptr);
 }
 
-void GetHashTest() {
-    std::unordered_set<proxy::proxy_ptr<std::string>> setList;
-    auto elem1 = proxy::make_proxy<std::string>("monkey1");
-    auto elem2 = proxy::make_proxy<std::string>("monkey2");
-    auto elem3 = proxy::make_proxy<std::string>("monkey3");
-    auto elem4 = proxy::make_proxy<std::string>("monkey4");
-    setList.insert(elem1);
-    setList.insert(elem2);
-    setList.insert(elem3);
-    setList.insert(elem4);
-
-    for (auto& elem : setList)
-        std::cout << elem.hashkey() << " == " << elem.get() << std::endl;
-
-    // unvalidate the 3rd proxy
-    auto elem3b = elem3;  // copy
-    std::cout << "unvalidating the ptrs..." << std::endl;
-    elem3.proxy_delete();
-
-    for (auto& elem : setList)
-        std::cout << elem.hashkey() << " == " << elem.get() << std::endl;
-
-    if (elem3 == nullptr)
-        std::cout << "elem3 is null and returns true if compared to nullptr"
-                  << std::endl;
-    else
-        std::cout
-            << "BUG elem3 is null and returns false if compared to nullptr"
-            << std::endl;
-
-    if (setList.contains(elem3))
-        std::cout << "elem3 is null and is found inside setList" << std::endl;
-    else
-        std::cout << "BUG elem3 is null and is not found inside setList"
-                  << std::endl;
-
-    // unvalidate all the proxies
-    elem1.proxy_delete();
-    elem2.proxy_delete();
-    elem3.proxy_delete();
-    elem4.proxy_delete();
-
-    for (auto& elem : setList)
-        std::cout << elem.hashkey() << " == " << elem.get() << std::endl;
-
-    if (auto it = setList.find(elem1); it != setList.end())
-        std::cout << "elem1 is null and has been found! " << it->hashkey()
-                  << " == " << it->get() << std::endl;
-    else
-        std::cout << "BUG elem1 is null and has not been found!" << std::endl;
-
-    if (auto it = setList.find(elem2); it != setList.end())
-        std::cout << "elem2 is null and has been found! " << it->hashkey()
-                  << " == " << it->get() << std::endl;
-    else
-        std::cout << "BUG elem2 is null and has not been found!" << std::endl;
-
-    if (auto it = setList.find(elem3); it != setList.end())
-        std::cout << "elem3 is null and has been found! " << it->hashkey()
-                  << " == " << it->get() << std::endl;
-    else
-        std::cout << "BUG elem3 is null and has not been found!" << std::endl;
-
-    if (auto it = setList.find(elem4); it != setList.end())
-        std::cout << "elem4 is null and has been found! " << it->hashkey()
-                  << " == " << it->get() << std::endl;
-    else
-        std::cout << "BUG elem4 is null and has not been found!" << std::endl;
+TEST_CASE("nullptr-constructed proxy_ptr is expired") {
+    proxy::proxy_ptr<int> p = nullptr;
+    CHECK(p.expired());
 }
 
-class BaseProxyTest {
+TEST_CASE("assign nullptr resets proxy_ptr") {
+    auto owner = proxy::make_proxy<int>(5);
+    proxy::proxy_ptr<int> p = owner;
+    CHECK(p.alive());
+
+    p = nullptr;
+    CHECK(p.expired());
+    CHECK(owner.alive());  // owner unaffected
+}
+
+// ── Comparison operators ────────────────────────────────────────────────────
+
+TEST_CASE("proxy_ptr vs nullptr comparisons") {
+    proxy::proxy_ptr<int> null;
+    auto owner = proxy::make_proxy<int>(1);
+    proxy::proxy_ptr<int> valid = owner;
+
+    CHECK(null == nullptr);
+    CHECK(nullptr == null);
+    CHECK_FALSE(null != nullptr);
+
+    CHECK(valid != nullptr);
+    CHECK(nullptr != valid);
+    CHECK_FALSE(valid == nullptr);
+}
+
+TEST_CASE("proxy_ptr vs raw pointer comparisons") {
+    auto owner = proxy::make_proxy<int>(99);
+    proxy::proxy_ptr<int> obs = owner;
+    int* raw = owner.get();
+
+    CHECK(obs == raw);
+    CHECK(raw == obs);
+    CHECK_FALSE(obs != raw);
+
+    int other = 0;
+    CHECK(obs != &other);
+    CHECK(&other != obs);
+}
+
+TEST_CASE("proxy_ptr vs proxy_ptr comparisons") {
+    auto a = proxy::make_proxy<int>(1);
+    auto b = proxy::make_proxy<int>(2);
+    proxy::proxy_ptr<int> oa = a;
+    proxy::proxy_ptr<int> ob = b;
+    proxy::proxy_ptr<int> oa2 = a;
+
+    CHECK(oa == oa2);
+    CHECK(oa != ob);
+    CHECK((oa < ob) != (ob < oa));  // strict ordering
+}
+
+// ── Hash containers ─────────────────────────────────────────────────────────
+
+TEST_CASE("proxy_ptr works in unordered_set") {
+    std::unordered_set<proxy::proxy_ptr<std::string>> s;
+    auto e1 = proxy::make_proxy<std::string>("a");
+    auto e2 = proxy::make_proxy<std::string>("b");
+    s.insert(e1);
+    s.insert(e2);
+
+    CHECK(s.size() == 2);
+    CHECK(s.contains(e1));
+    CHECK(s.contains(e2));
+
+    // hashkey survives proxy_delete — element stays findable
+    e1.proxy_delete();
+    CHECK(s.contains(e1));
+}
+
+TEST_CASE("proxy_ptr works in ordered set") {
+    std::set<proxy::proxy_ptr<int>> s;
+    auto a = proxy::make_proxy<int>(1);
+    auto b = proxy::make_proxy<int>(2);
+    proxy::proxy_ptr<int> oa = a;
+    proxy::proxy_ptr<int> ob = b;
+    s.insert(oa);
+    s.insert(ob);
+
+    CHECK(s.size() == 2);
+}
+
+// ── Inheritance ─────────────────────────────────────────────────────────────
+
+class Base {
    public:
-    virtual ~BaseProxyTest() { std::cout << "~BaseProxyTest" << std::endl; }
+    virtual ~Base() = default;
 };
-class DerivedProxyTest : public BaseProxyTest {
-   public:
-    ~DerivedProxyTest() { std::cout << "~DerivedProxyTest" << std::endl; }
-};
+class Derived : public Base {};
 
-void InheritTest() {
-    auto derived = proxy::make_proxy<DerivedProxyTest>();
-    auto derived2 =
-        proxy::static_pointer_cast<BaseProxyTest>(derived);  // todo kaboom
-    derived2.proxy_delete();
-    // it must call both destructor
-    // checking derived is no longer alive
-    if (!derived)
-        std::cout << "derived is no longer alive." << std::endl;
-    if (!derived2)
-        std::cout << "derived2 is no longer alive." << std::endl;
+TEST_CASE("static_pointer_cast preserves state") {
+    auto d = proxy::make_proxy<Derived>();
+    auto b = proxy::static_pointer_cast<Base>(d);
+
+    CHECK(b.alive());
+    CHECK(d.alive());
+
+    d.proxy_delete();
+    CHECK(b.expired());
+    CHECK(d.expired());
 }
 
-void ParentBaseDeleteTest() {
-    struct ParentBaseTest : proxy::proxy_parent_base<ParentBaseTest> {};
-    struct DerivedTest : ParentBaseTest {};
+TEST_CASE("dynamic_pointer_cast succeeds for correct type") {
+    auto d = proxy::make_proxy<Derived>();
+    auto b = proxy::static_pointer_cast<Base>(d);
+    auto back = proxy::dynamic_pointer_cast<Derived>(b);
 
-    // constructing a proxy parent base object
-    {
-        DerivedTest object;
-
-        // generating proxy pointers
-        auto pr1 = object.proxy();
-        auto pr2 = object.proxy();
-        auto pr3 = object.proxy_from_base<DerivedTest>();
-
-        // calling proxy_delete on one of the proxy generated
-        pr1.proxy_delete();
-
-        // checking value of proxy pointers
-        std::cout << "pr1.alive = " << pr1.alive() << std::endl;
-        std::cout << "pr1.ptr = " << pr1.get() << std::endl;
-        std::cout << "pr2.alive = " << pr2.alive() << std::endl;
-        std::cout << "pr2.ptr = " << pr2.get() << std::endl;
-        std::cout << "pr3.alive = " << pr3.alive() << std::endl;
-        std::cout << "pr3.ptr = " << pr3.get() << std::endl;
-    }
-
-    // checking for proxy_from_this
-    {
-        std::cout << "\n\nsecond test:" << std::endl;
-        auto derived = proxy::make_proxy<DerivedTest>();
-        auto base = derived->proxy_from_this();
-        base.proxy_delete();
-
-        std::cout << "derived.alive " << derived.alive() << std::endl;
-        std::cout << "derived.ptr " << derived.get() << std::endl;
-        std::cout << "base.alive " << base.alive() << std::endl;
-        std::cout << "base.ptr " << base.get() << std::endl;
-    }
+    CHECK(back.alive());
+    CHECK(back.get() == d.get());
 }
 
-class ValidBaseTest : public proxy::enable_proxy_from_this<ValidBaseTest> {
+TEST_CASE("dynamic_pointer_cast returns null for wrong type") {
+    class Other : public Base {};
+    auto d = proxy::make_proxy<Derived>();
+    auto b = proxy::static_pointer_cast<Base>(d);
+    auto wrong = proxy::dynamic_pointer_cast<Other>(b);
+
+    CHECK(wrong.expired());
+}
+
+// ── proxy_parent_base / enable_proxy_from_this ──────────────────────────────
+
+class Entity : public proxy::enable_proxy_from_this<Entity> {
    public:
     std::string name;
-    int id;
-    ValidBaseTest() : name("NONAME"), id(123) {}
-    ValidBaseTest(std::string _name, int _id) : name(_name), id(_id) {}
+    Entity(std::string n = "default") : name(std::move(n)) {}
 };
 
-class ValidDerivedTest : public ValidBaseTest {
+class Character : public Entity {
    public:
-    std::string subname;
-    int subid;
-    ValidDerivedTest(std::string _name, int _id, std::string _subname,
-                     int _subid)
-        : ValidBaseTest(_name, _id), subname(_subname), subid(_subid) {}
+    int level;
+    Character(std::string n, int lvl) : Entity(std::move(n)), level(lvl) {}
 };
 
-void ValidInheritTest() {
-    auto derived =
-        proxy::make_proxy<ValidDerivedTest>("mname", 111, "msubname", 222);
-    auto base = derived->proxy_from_this();
-    auto rederived = derived->proxy_from_base<ValidDerivedTest>();
+TEST_CASE("proxy_from_this returns valid observer") {
+    auto owner = proxy::make_proxy<Entity>("test");
+    auto obs = owner->proxy_from_this();
 
-    std::cout << "\nexpecting they are all alive and valid:" << std::endl;
-    std::cout << "derived ptr " << derived.get() << " name " << derived->name
-              << " id " << derived->id << " subname " << derived->subname
-              << " subid " << derived->subid << std::endl;
-    std::cout << "base ptr " << derived.get() << " name " << derived->name
-              << " id " << derived->id << std::endl;
-    std::cout << "rederived ptr " << rederived.get() << " name "
-              << rederived->name << " id " << rederived->id << " subname "
-              << rederived->subname << " subid " << rederived->subid
-              << std::endl;
+    CHECK(obs.alive());
+    CHECK(obs->name == "test");
 
-    // destroying first node of proxy
-    rederived.proxy_delete();
-    std::cout << "\nexpecting derived has a value while base and rederived are "
-                 "no longer alive :"
-              << std::endl;
-    std::cout << "derived ptr " << derived.get() << " alive " << derived.alive()
-              << std::endl;
-    std::cout << "base ptr " << base.get() << " alive " << base.alive()
-              << std::endl;
-    std::cout << "rederived ptr " << rederived.get() << " alive "
-              << rederived.alive() << std::endl;
-
-    // destroying the second node of proxy
-    derived.proxy_delete();
-    std::cout << "\nexpecting all of them are no longer alive:" << std::endl;
-    std::cout << "derived ptr " << derived.get() << " alive " << derived.alive()
-              << std::endl;
-    std::cout << "base ptr " << base.get() << " alive " << base.alive()
-              << std::endl;
-    std::cout << "rederived ptr " << rederived.get() << " alive "
-              << rederived.alive() << std::endl;
+    owner.proxy_delete();
+    CHECK(obs.expired());
 }
 
-class EntityTest : public proxy::enable_proxy_from_this<EntityTest> {
-   public:
-    std::string name;
-    int id;
-    EntityTest() : name("NONAME"), id(123) {}
-    EntityTest(std::string _name, int _id) : name(_name), id(_id) {}
-};
-
-class CharacterTest : public EntityTest {
-   public:
-    std::string subname;
-    int subid;
-    CharacterTest(std::string _name, int _id, std::string _subname, int _subid)
-        : EntityTest(_name, _id), subname(_subname), subid(_subid) {}
-};
-
-void FullNodeInheritTest() {
+TEST_CASE("proxy_from_this on stack object") {
+    proxy::proxy_ptr<Entity> obs;
     {
-        auto character =
-            proxy::make_proxy<CharacterTest>("mname", 111, "msubname", 222);
-        auto entity = proxy::static_pointer_cast<EntityTest>(character);
-
-        entity.proxy_delete();
-
-        std::cout << "character ptr " << character.get() << " hashkey "
-                  << character.hashkey() << " alive " << character.alive()
-                  << std::endl;
-        std::cout << "entity ptr " << entity.get() << " hashkey "
-                  << entity.hashkey() << " alive " << entity.alive()
-                  << std::endl;
+        Entity e("stack");
+        obs = e.proxy_from_this();
+        CHECK(obs.alive());
+        CHECK(obs->name == "stack");
     }
+    // destructor calls proxy_delete via proxy_parent_base
+    CHECK(obs.expired());
+}
 
+TEST_CASE("proxy_from_base with derived type") {
+    auto owner = proxy::make_proxy<Character>("hero", 10);
+    auto base_obs = owner->proxy_from_this();
+    auto derived_obs = owner->proxy_from_base<Character>();
+
+    CHECK(base_obs.alive());
+    CHECK(derived_obs.alive());
+    CHECK(derived_obs->level == 10);
+
+    owner.proxy_delete();
+    CHECK(base_obs.expired());
+    CHECK(derived_obs.expired());
+}
+
+TEST_CASE("proxy_parent_base proxy_delete invalidates all proxies") {
+    Entity e("local");
+    auto p1 = e.proxy();
+    auto p2 = e.proxy_from_this();
+
+    CHECK(p1.alive());
+    CHECK(p2.alive());
+
+    e.proxy_delete();
+    CHECK(p1.expired());
+    CHECK(p2.expired());
+}
+
+// ── Linked references ───────────────────────────────────────────────────────
+
+class Party;
+class Member {
+   public:
+    proxy::proxy_ptr<Party> party;
+};
+
+class Party : public proxy::enable_proxy_from_this<Party> {
+   public:
+    void link(proxy::proxy_ptr<Member> m) { m->party = proxy_from_this(); }
+};
+
+TEST_CASE("cross-referenced proxies track lifetime") {
+    auto member = proxy::make_proxy<Member>();
     {
-        auto character =
-            proxy::make_proxy<CharacterTest>("mname", 111, "msubname", 222);
-        auto entity = proxy::static_pointer_cast<EntityTest>(character);
+        auto party = proxy::make_proxy<Party>();
+        party->link(member);
 
-        auto base = entity->proxy_from_this();
-        base.proxy_delete();
-
-        std::cout << "character ptr " << character.get() << " hashkey "
-                  << character.hashkey() << " alive " << character.alive()
-                  << std::endl;
-        std::cout << "entity ptr " << entity.get() << " hashkey "
-                  << entity.hashkey() << " alive " << entity.alive()
-                  << std::endl;
-        std::cout << "base ptr " << base.get() << " hashkey " << base.hashkey()
-                  << " alive " << base.alive() << std::endl;
+        CHECK(member->party.alive());
     }
+    // party destroyed — member's reference is now expired
+    CHECK(member->party.expired());
 }
 
-void DebuggingWeakrefTest() {
-    auto ptr = proxy::make_proxy<EntityTest>();
-    auto weakptr = ptr->proxy_from_this();
+// ── Raw memory / new+delete ─────────────────────────────────────────────────
 
-    std::cout << "expecting 0-1" << std::endl;
-    std::cout << "result: " << ptr._is_weakref() << "-" << weakptr._is_weakref()
-              << std::endl;
-}
+TEST_CASE("proxy_from_this on raw new/delete object") {
+    proxy::proxy_ptr<Entity> obs;
 
+    auto* obj = new Entity("raw");
+    obs = obj->proxy_from_this();
+    CHECK(obs.alive());
+    CHECK(obs->name == "raw");
 
-
-class PartyTest;
-class CharLinkTest {
-   public:
-    proxy::proxy_ptr<PartyTest> party;
-};
-
-class PartyTest : public proxy::enable_proxy_from_this<PartyTest> {
-   public:
-    void Link(proxy::proxy_ptr<CharLinkTest> ch) {
-        ch->party = proxy_from_this();
-        std::cout << "INLINK ptr " << ch->party.get() << " hashkey "
-                  << ch->party.hashkey() << " alive " << ch->party.alive()
-                  << std::endl;
-
-    }
-};
-
-void LinkedRefTest() {
-    auto ch = proxy::make_proxy<CharLinkTest>();
-    {
-        auto party = proxy::make_proxy<PartyTest>();
-        std::cout << "REAL ptr " << party.get() << " hashkey "
-                  << party.hashkey() << " alive " << party.alive() << std::endl;
-
-        party->Link(ch);
-
-        std::cout << "INSIDE ptr " << ch->party.get() << " hashkey "
-                  << ch->party.hashkey() << " alive " << ch->party.alive()
-                  << std::endl;
-
-        std::cout << "REAL ptr " << party.get() << " hashkey "
-                  << party.hashkey() << " alive " << party.alive() << std::endl;
-    }
-    std::cout << "OUTSIDE ptr " << ch->party.get() << " hashkey "
-              << ch->party.hashkey() << " alive " << ch->party.alive()
-              << std::endl;
-}
-
-class RawMemoryClass : public proxy::enable_proxy_from_this<RawMemoryClass> {
-   public:
-    std::string name;
-    RawMemoryClass(std::string _name) : name(_name) {}
-};
-
-
-void RawMemoryTest() {
-    proxy::proxy_ptr<RawMemoryClass> proxy;
-
-    auto obj = new RawMemoryClass("Thicc");
-    proxy = obj->proxy_from_this();
-    std::cout << "INSIDE ptr " << proxy.get() << " hashkey "
-                << proxy.hashkey() << " alive " << proxy.alive() << std::endl;
     delete obj;
-
-    std::cout << "OUTSIDE ptr " << proxy.get() << " hashkey " << proxy.hashkey()
-              << " alive " << proxy.alive() << std::endl;
+    CHECK(obs.expired());
 }
 
+// ── Array support ───────────────────────────────────────────────────────────
 
-int main() {
-    std::cout << "Starting the tests..." << std::endl;
+TEST_CASE("make_proxy with array type") {
+    auto arr = proxy::make_proxy<char[]>(100);
+    CHECK(arr.alive());
 
-    // BenchTest();
-    // PrintTest();
-    // PrintSharedTest();
-    // GetPtrTest();
-    // GetHashTest();
-    // InheritTest();
-    // ParentBaseDeleteTest();
-    // ValidInheritTest();
-    // FullNodeInheritTest();
-    // DebuggingWeakrefTest();
-    // LinkedRefTest();
-    RawMemoryTest();
+    arr.proxy_delete();
+    CHECK(arr.expired());
+}
 
-    std::cout << "All tests completed." << std::endl;
-    std::getchar();
-    std::getchar();
-    return 0;
+// ── Weakref debugging ───────────────────────────────────────────────────────
+
+TEST_CASE("_is_weakref distinguishes owner from proxy_from_this") {
+    auto owner = proxy::make_proxy<Entity>();
+    auto weak = owner->proxy_from_this();
+
+    CHECK_FALSE(owner._is_weakref());
+    CHECK(weak._is_weakref());
+}
+
+// ── proxy_release ───────────────────────────────────────────────────────────
+
+TEST_CASE("proxy_release detaches without deleting") {
+    auto owner = proxy::make_proxy<int>(42);
+    proxy::proxy_ptr<int> obs = owner;
+
+    int* raw = owner.proxy_release();
+    CHECK(raw != nullptr);
+    CHECK(owner.expired());
+    CHECK(obs.expired());
+
+    delete raw;  // manual cleanup
+}
+
+// ── Atomic mode ─────────────────────────────────────────────────────────────
+
+TEST_CASE("make_proxy_atomic basic lifecycle") {
+    auto owner = proxy::make_proxy_atomic<int>(7);
+    proxy::proxy_ptr<int, proxy::proxy_atomic> obs = owner;
+
+    CHECK(obs.alive());
+    CHECK(*obs.get() == 7);
+
+    owner.proxy_delete();
+    CHECK(obs.expired());
+}
+
+TEST_CASE("proxy_factory creates proxies") {
+    auto p = proxy::proxy_factory<int, proxy::proxy_non_atomic>::make(99);
+    CHECK(p.alive());
+    CHECK(*p.get() == 99);
 }
