@@ -36,3 +36,4 @@ Release/
 Debug/
 x86/
 .vs/
+build/
