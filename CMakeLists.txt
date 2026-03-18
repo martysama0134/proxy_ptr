@@ -21,7 +21,7 @@ if(PROXY_PTR_BUILD_TESTS)
     FetchContent_MakeAvailable(doctest)
 
     enable_testing()
-    add_executable(proxy_ptr_tests test/test.cpp)
+    add_executable(proxy_ptr_tests test/test.cpp test/test_atomic.cpp)
     target_link_libraries(proxy_ptr_tests PRIVATE proxy_ptr doctest_with_main)
     target_compile_features(proxy_ptr_tests PRIVATE cxx_std_17)
 
