@@ -254,31 +254,31 @@ namespace proxy {
             return !(_Right < *this);
         }
 
-        Type* hashkey() const {
+        PROXY_PTR_NO_DISCARD Type* hashkey() const {
             if (!_is_Pointing())
                 return nullptr;
             return static_cast<Type*>(_ppobj->get());
         }
 
-        Type* get() const { return alive() ? hashkey() : nullptr; }
+        PROXY_PTR_NO_DISCARD Type* get() const { return alive() ? hashkey() : nullptr; }
 
         template <class Type2 = Type,
                   class = std::enable_if_t<!PROXY_PTR_IS_ARRAY(Type2)>>
-        Type2* operator->() const {
+        PROXY_PTR_NO_DISCARD Type2* operator->() const {
             assert(_is_Pointing() && alive());
             return get();
         }
 
         template <class Type2 = Type,
                   class = std::enable_if_t<PROXY_PTR_IS_ARRAY(Type2)>>
-        Type2& operator[](std::ptrdiff_t p) const {
+        PROXY_PTR_NO_DISCARD Type2& operator[](std::ptrdiff_t p) const {
             assert(_is_Pointing() && alive());
             return (*get())[p];
         }
 
         template <class Type2 = Type,
                   class = std::enable_if_t<!PROXY_PTR_IS_ARRAY(Type2)>>
-        Type2& operator*() const {
+        PROXY_PTR_NO_DISCARD Type2& operator*() const {
             assert(_is_Pointing() && alive());
             return *get();
         }
@@ -303,19 +303,19 @@ namespace proxy {
             return (*this);
         }
 
-        Type* proxy_release() {
+        PROXY_PTR_NO_DISCARD Type* proxy_release() {
             if (!_is_Pointing())
                 return nullptr;
             return static_cast<Type*>(_ppobj->release());
         }
 
-        bool alive() const {
+        PROXY_PTR_NO_DISCARD bool alive() const {
             return _is_Pointing() && _ppobj->alive() && _ppobj->get();
         }
 
-        bool expired() const { return !alive(); }
+        PROXY_PTR_NO_DISCARD bool expired() const { return !alive(); }
 
-        bool _is_weakref() const { return _ppobj && _ppobj->is_weak(); }
+        PROXY_PTR_NO_DISCARD bool _is_weakref() const { return _ppobj && _ppobj->is_weak(); }
 
         ~proxy_ptr() { _detach(); }
 
@@ -386,26 +386,26 @@ namespace proxy {
     };
 
     template <class T, class U>
-    proxy::proxy_ptr<T> static_pointer_cast(
+    PROXY_PTR_NO_DISCARD proxy::proxy_ptr<T> static_pointer_cast(
         const proxy::proxy_ptr<U>& r) noexcept;
 
     template <class T, class U>
-    proxy::proxy_ptr<T> dynamic_pointer_cast(
+    PROXY_PTR_NO_DISCARD proxy::proxy_ptr<T> dynamic_pointer_cast(
         const proxy::proxy_ptr<U>& r) noexcept;
 
     template <class T, class U>
-    proxy::proxy_ptr<T> const_pointer_cast(
+    PROXY_PTR_NO_DISCARD proxy::proxy_ptr<T> const_pointer_cast(
         const proxy::proxy_ptr<U>& r) noexcept;
 
     template <class T, class U>
-    proxy::proxy_ptr<T> reinterpret_pointer_cast(
+    PROXY_PTR_NO_DISCARD proxy::proxy_ptr<T> reinterpret_pointer_cast(
         const proxy::proxy_ptr<U>& r) noexcept;
 
     template <class Type> class proxy_parent_base {
        public:
-        proxy_ptr<Type> proxy() { return {_proxyPtr}; }
-        proxy_ptr<Type> proxy_from_this() { return {_proxyPtr}; }
-        template <class Derived> proxy_ptr<Derived> proxy_from_base() {
+        PROXY_PTR_NO_DISCARD proxy_ptr<Type> proxy() { return {_proxyPtr}; }
+        PROXY_PTR_NO_DISCARD proxy_ptr<Type> proxy_from_this() { return {_proxyPtr}; }
+        template <class Derived> PROXY_PTR_NO_DISCARD proxy_ptr<Derived> proxy_from_base() {
             return {proxy::static_pointer_cast<Derived>(_proxyPtr)};
         }
         void proxy_delete() {
@@ -434,14 +434,14 @@ namespace proxy {
     }  // namespace detail
 
     template <class Ty, class... Args>
-    std::enable_if_t<detail::is_proxy_valid_type<Ty>, proxy_owner_ptr<Ty>>
+    PROXY_PTR_NO_DISCARD std::enable_if_t<detail::is_proxy_valid_type<Ty>, proxy_owner_ptr<Ty>>
     make_proxy(const Args&... Arguments) {
         return detail::make_proxy<Ty, proxy_non_atomic>::construct(
             Arguments...);
     }
 
     template <class Ty, class... Args>
-    std::enable_if_t<detail::is_proxy_valid_type<Ty>,
+    PROXY_PTR_NO_DISCARD std::enable_if_t<detail::is_proxy_valid_type<Ty>,
                      proxy_owner_ptr<Ty, proxy_atomic>>
     make_proxy_atomic(const Args&... Arguments) {
         return detail::make_proxy<Ty, proxy_atomic>::construct(Arguments...);
@@ -449,21 +449,21 @@ namespace proxy {
 
     template <class Type, class AtomicType> struct proxy_factory {
         template <class... args>
-        static proxy::proxy_owner_ptr<Type, AtomicType> make(
+        PROXY_PTR_NO_DISCARD static proxy::proxy_owner_ptr<Type, AtomicType> make(
             const args&... arg) {
             return detail::make_proxy<Type, AtomicType>::construct(arg...);
         }
     };
 
     template <class T, class U>
-    proxy::proxy_ptr<T> static_pointer_cast(
+    PROXY_PTR_NO_DISCARD proxy::proxy_ptr<T> static_pointer_cast(
         const proxy::proxy_ptr<U>& r) noexcept {
         auto p = static_cast<typename proxy::proxy_ptr<T>::Type*>(r.get());
         return proxy::proxy_ptr<T>{p, r};
     }
 
     template <class T, class U>
-    proxy::proxy_ptr<T> dynamic_pointer_cast(
+    PROXY_PTR_NO_DISCARD proxy::proxy_ptr<T> dynamic_pointer_cast(
         const proxy::proxy_ptr<U>& r) noexcept {
         if (auto p = dynamic_cast<typename proxy::proxy_ptr<T>::Type*>(r.get()))
             return proxy::proxy_ptr<T>{p, r};
@@ -472,14 +472,14 @@ namespace proxy {
     }
 
     template <class T, class U>
-    proxy::proxy_ptr<T> const_pointer_cast(
+    PROXY_PTR_NO_DISCARD proxy::proxy_ptr<T> const_pointer_cast(
         const proxy::proxy_ptr<U>& r) noexcept {
         auto p = const_cast<typename proxy::proxy_ptr<T>::Type*>(r.get());
         return proxy::proxy_ptr<T>{p, r};
     }
 
     template <class T, class U>
-    proxy::proxy_ptr<T> reinterpret_pointer_cast(
+    PROXY_PTR_NO_DISCARD proxy::proxy_ptr<T> reinterpret_pointer_cast(
         const proxy::proxy_ptr<U>& r) noexcept {
         auto p = reinterpret_cast<typename proxy::proxy_ptr<T>::Type*>(r.get());
         return proxy::proxy_ptr<T>{p, r};
