@@ -13,7 +13,7 @@ TEST_CASE("atomic: concurrent copy from multiple threads") {
 
     std::vector<std::thread> threads;
     for (int t = 0; t < N_THREADS; ++t) {
-        threads.emplace_back([&owner, &alive_count]() {
+        threads.emplace_back([&owner, &alive_count, N_COPIES]() {
             for (int i = 0; i < N_COPIES; ++i) {
                 proxy::proxy_ptr<int, proxy::proxy_atomic> copy = owner;
                 if (copy.alive())
@@ -40,7 +40,7 @@ TEST_CASE("atomic: concurrent copy while deleting") {
 
     std::vector<std::thread> threads;
     for (int t = 0; t < N_THREADS; ++t) {
-        threads.emplace_back([&]() {
+        threads.emplace_back([&, N_COPIES]() {
             while (!start.load(std::memory_order_acquire)) {}
             for (int i = 0; i < N_COPIES; ++i) {
                 proxy::proxy_ptr<int, proxy::proxy_atomic> copy = owner;
@@ -72,7 +72,7 @@ TEST_CASE("atomic: concurrent copy and destroy proxies") {
 
     std::vector<std::thread> threads;
     for (int t = 0; t < N_THREADS; ++t) {
-        threads.emplace_back([&owner]() {
+        threads.emplace_back([&owner, N_ITERS]() {
             for (int i = 0; i < N_ITERS; ++i) {
                 // create and immediately destroy a copy — exercises ref counting
                 proxy::proxy_ptr<int, proxy::proxy_atomic> tmp = owner;

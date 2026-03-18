@@ -98,13 +98,13 @@ TEST_CASE("proxy_ptr vs nullptr comparisons") {
     auto owner = proxy::make_proxy<int>(1);
     proxy::proxy_ptr<int> valid = owner;
 
-    CHECK(null == nullptr);
-    CHECK(nullptr == null);
-    CHECK_FALSE(null != nullptr);
+    CHECK((null == nullptr));
+    CHECK((nullptr == null));
+    CHECK_FALSE((null != nullptr));
 
-    CHECK(valid != nullptr);
-    CHECK(nullptr != valid);
-    CHECK_FALSE(valid == nullptr);
+    CHECK((valid != nullptr));
+    CHECK((nullptr != valid));
+    CHECK_FALSE((valid == nullptr));
 }
 
 TEST_CASE("proxy_ptr vs raw pointer comparisons") {
@@ -112,13 +112,13 @@ TEST_CASE("proxy_ptr vs raw pointer comparisons") {
     proxy::proxy_ptr<int> obs = owner;
     int* raw = owner.get();
 
-    CHECK(obs == raw);
-    CHECK(raw == obs);
-    CHECK_FALSE(obs != raw);
+    CHECK((obs == raw));
+    CHECK((raw == obs));
+    CHECK_FALSE((obs != raw));
 
     int other = 0;
-    CHECK(obs != &other);
-    CHECK(&other != obs);
+    CHECK((obs != &other));
+    CHECK((&other != obs));
 }
 
 TEST_CASE("proxy_ptr vs proxy_ptr comparisons") {
@@ -128,8 +128,8 @@ TEST_CASE("proxy_ptr vs proxy_ptr comparisons") {
     proxy::proxy_ptr<int> ob = b;
     proxy::proxy_ptr<int> oa2 = a;
 
-    CHECK(oa == oa2);
-    CHECK(oa != ob);
+    CHECK((oa == oa2));
+    CHECK((oa != ob));
     CHECK((oa < ob) != (ob < oa));  // strict ordering
 }
 
@@ -143,12 +143,12 @@ TEST_CASE("proxy_ptr works in unordered_set") {
     s.insert(e2);
 
     CHECK(s.size() == 2);
-    CHECK(s.contains(e1));
-    CHECK(s.contains(e2));
+    CHECK(s.find(e1) != s.end());
+    CHECK(s.find(e2) != s.end());
 
     // hashkey survives proxy_delete — element stays findable
     e1.proxy_delete();
-    CHECK(s.contains(e1));
+    CHECK(s.find(e1) != s.end());
 }
 
 TEST_CASE("proxy_ptr works in ordered set") {
