@@ -517,16 +517,14 @@ template <class Type, class AtomicType>
 PROXY_PTR_NO_DISCARD bool operator<(
     const proxy::proxy_ptr<Type, AtomicType>& _Left,
     std::nullptr_t _Right) noexcept {
-    using _Ptr = typename proxy::proxy_ptr<Type, AtomicType>::pointer;
-    return std::less<_Ptr>()(_Left.hashkey(), _Right);
+    return std::less<Type*>()(_Left.hashkey(), _Right);
 }
 
 template <class Type, class AtomicType>
 PROXY_PTR_NO_DISCARD bool operator<(
     std::nullptr_t _Left,
     const proxy::proxy_ptr<Type, AtomicType>& _Right) noexcept {
-    using _Ptr = typename proxy::proxy_ptr<Type, AtomicType>::pointer;
-    return std::less<_Ptr>()(_Left, _Right.hashkey());
+    return std::less<Type*>()(_Left, _Right.hashkey());
 }
 
 template <class Type, class AtomicType>
@@ -599,15 +597,13 @@ PROXY_PTR_NO_DISCARD bool operator!=(
 template <class Type, class AtomicType>
 PROXY_PTR_NO_DISCARD bool operator<(
     const proxy::proxy_ptr<Type, AtomicType>& _Left, const Type* const _Right) {
-    using _Ptr = typename proxy::proxy_ptr<Type, AtomicType>::pointer;
-    return std::less<_Ptr>()(_Left.hashkey(), _Right);
+    return std::less<const Type*>()(_Left.hashkey(), _Right);
 }
 
 template <class Type, class AtomicType>
 PROXY_PTR_NO_DISCARD bool operator<(
     const Type* const _Left, const proxy::proxy_ptr<Type, AtomicType>& _Right) {
-    using _Ptr = typename proxy::proxy_ptr<Type, AtomicType>::pointer;
-    return std::less<_Ptr>()(_Left, _Right.hashkey());
+    return std::less<const Type*>()(_Left, _Right.hashkey());
 }
 
 template <class Type, class AtomicType>
@@ -643,86 +639,6 @@ PROXY_PTR_NO_DISCARD bool operator<=(
 template <class Type, class AtomicType>
 PROXY_PTR_NO_DISCARD bool operator<=(
     const Type* const _Left, const proxy::proxy_ptr<Type, AtomicType>& _Right) {
-    return !(_Right < _Left);
-}
-
-//
-
-template <class Type, class AtomicType>
-PROXY_PTR_NO_DISCARD bool operator==(
-    const proxy::proxy_ptr<Type, AtomicType>& _Left,
-    Type* const _ptr) noexcept {
-    return _Left.hashkey() == _ptr;
-}
-
-template <class Type, class AtomicType>
-PROXY_PTR_NO_DISCARD bool operator==(
-    Type* const _ptr,
-    const proxy::proxy_ptr<Type, AtomicType>& _Right) noexcept {
-    return _Right.hashkey() == _ptr;
-}
-
-template <class Type, class AtomicType>
-PROXY_PTR_NO_DISCARD bool operator!=(
-    const proxy::proxy_ptr<Type, AtomicType>& _Left,
-    Type* const _Right) noexcept {
-    return !(_Left == _Right);
-}
-
-template <class Type, class AtomicType>
-PROXY_PTR_NO_DISCARD bool operator!=(
-    Type* const _Left,
-    const proxy::proxy_ptr<Type, AtomicType>& _Right) noexcept {
-    return !(_Left == _Right);
-}
-
-template <class Type, class AtomicType>
-PROXY_PTR_NO_DISCARD bool operator<(
-    const proxy::proxy_ptr<Type, AtomicType>& _Left, Type* const _Right) {
-    using _Ptr = typename proxy::proxy_ptr<Type, AtomicType>::pointer;
-    return std::less<_Ptr>()(_Left.hashkey(), _Right);
-}
-
-template <class Type, class AtomicType>
-PROXY_PTR_NO_DISCARD bool operator<(
-    Type* const _Left, const proxy::proxy_ptr<Type, AtomicType>& _Right) {
-    using _Ptr = typename proxy::proxy_ptr<Type, AtomicType>::pointer;
-    return std::less<_Ptr>()(_Left, _Right.hashkey());
-}
-
-template <class Type, class AtomicType>
-PROXY_PTR_NO_DISCARD bool operator>=(
-    const proxy::proxy_ptr<Type, AtomicType>& _Left, Type* const _Right) {
-    return !(_Left < _Right);
-}
-
-template <class Type, class AtomicType>
-PROXY_PTR_NO_DISCARD bool operator>=(
-    Type* const _Left, const proxy::proxy_ptr<Type, AtomicType>& _Right) {
-    return !(_Left < _Right);
-}
-
-template <class Type, class AtomicType>
-PROXY_PTR_NO_DISCARD bool operator>(
-    const proxy::proxy_ptr<Type, AtomicType>& _Left, Type* const _Right) {
-    return _Right < _Left;
-}
-
-template <class Type, class AtomicType>
-PROXY_PTR_NO_DISCARD bool operator>(
-    Type* const _Left, const proxy::proxy_ptr<Type, AtomicType>& _Right) {
-    return _Right < _Left;
-}
-
-template <class Type, class AtomicType>
-PROXY_PTR_NO_DISCARD bool operator<=(
-    const proxy::proxy_ptr<Type, AtomicType>& _Left, Type* const _Right) {
-    return !(_Right < _Left);
-}
-
-template <class Type, class AtomicType>
-PROXY_PTR_NO_DISCARD bool operator<=(
-    Type* const _Left, const proxy::proxy_ptr<Type, AtomicType>& _Right) {
     return !(_Right < _Left);
 }
 
