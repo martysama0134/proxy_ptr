@@ -1,4 +1,7 @@
 cmake_minimum_required(VERSION 3.14)
+if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.29")
+    set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "Allow older FetchContent deps")
+endif()
 project(proxy_ptr LANGUAGES CXX)
 
 # Header-only interface library

@@ -14,12 +14,12 @@ jobs:
         include:
           - os: ubuntu-latest
             compiler: gcc
-            cc: gcc-12
-            cxx: g++-12
+            cc: gcc
+            cxx: g++
           - os: ubuntu-latest
             compiler: clang
-            cc: clang-15
-            cxx: clang++-15
+            cc: clang
+            cxx: clang++
           - os: windows-latest
             compiler: msvc
           - os: macos-latest

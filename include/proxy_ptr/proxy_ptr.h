@@ -20,6 +20,7 @@
     #include <type_traits>
     #include <assert.h>
     #include <atomic>
+    #include <cstdint>
     #include <memory>
 
     #define PROXY_PTR_NO_DISCARD [[nodiscard]]
