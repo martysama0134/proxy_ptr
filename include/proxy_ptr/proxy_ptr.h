@@ -62,15 +62,27 @@ namespace proxy {
             using type = size_t;
         };
 
+        template <class Ty> struct _deduce_alive_type;
+        template <> struct _deduce_alive_type<proxy_atomic> {
+            using type = std::atomic<bool>;
+        };
+        template <> struct _deduce_alive_type<proxy_non_atomic> {
+            using type = bool;
+        };
+
+        template <class Ty>
+        using deduce_alive_type = typename _deduce_alive_type<Ty>::type;
+
         template <class Ty>
         using deduce_ref_count_type = typename _deduce_ref_count_type<Ty>::type;
 
         template <class AtomicType> class _proxy_common_state_base {
            protected:
             using ref_count_t = deduce_ref_count_type<AtomicType>;
+            using alive_t = deduce_alive_type<AtomicType>;
             void* _ptr = nullptr;
             ref_count_t _ref_count = static_cast<size_t>(0);
-            bool _alive = false;
+            alive_t _alive = false;
 
            public:
             _proxy_common_state_base(void* p) : _ptr(p) { _alive = true; }
