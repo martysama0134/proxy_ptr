@@ -383,3 +383,50 @@ TEST_CASE("proxy_factory creates proxies") {
     CHECK(p.alive());
     CHECK(*p.get() == 99);
 }
+
+// ── Custom deleters ─────────────────────────────────────────────────────────
+
+static bool g_custom_deleter_called = false;
+struct TestDeleter {
+    void operator()(int* p) {
+        g_custom_deleter_called = true;
+        delete p;
+    }
+};
+
+TEST_CASE("custom deleter is called on proxy_delete") {
+    g_custom_deleter_called = false;
+    auto owner = proxy::proxy_owner_ptr<int>(new int(42), TestDeleter{});
+    CHECK(owner.alive());
+    CHECK_FALSE(g_custom_deleter_called);
+
+    owner.proxy_delete();
+    CHECK(g_custom_deleter_called);
+    CHECK(owner.expired());
+}
+
+// ── Same-state assignment ───────────────────────────────────────────────────
+
+TEST_CASE("assign between observers of same state is safe") {
+    auto owner = proxy::make_proxy<int>(5);
+    proxy::proxy_ptr<int> a = owner;
+    proxy::proxy_ptr<int> b = owner;
+
+    // a and b share state — assignment should be a no-op
+    a = b;
+    CHECK(a.alive());
+    CHECK(b.alive());
+    CHECK(a.get() == b.get());
+}
+
+// ── Move-only constructor args ──────────────────────────────────────────────
+
+TEST_CASE("make_proxy supports move-only constructor args") {
+    struct MoveOnly {
+        std::unique_ptr<int> val;
+        MoveOnly(std::unique_ptr<int> v) : val(std::move(v)) {}
+    };
+    auto owner = proxy::make_proxy<MoveOnly>(std::make_unique<int>(42));
+    CHECK(owner.alive());
+    CHECK(*owner->val == 42);
+}
