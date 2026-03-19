@@ -645,7 +645,7 @@ PROXY_PTR_NO_DISCARD bool operator<=(
 
 template <class Type, class AtomicType>
 struct std::hash<proxy::proxy_ptr<Type, AtomicType>> {
-    size_t operator()(const proxy::proxy_ptr<Type, AtomicType> _ptr) const {
+    size_t operator()(const proxy::proxy_ptr<Type, AtomicType>& _ptr) const {
         return reinterpret_cast<std::uintptr_t>(_ptr.hashkey());
     }
 };
