@@ -308,12 +308,6 @@ namespace proxy {
             return (*this);
         }
 
-        PROXY_PTR_NO_DISCARD Type* proxy_release() {
-            if (!_is_Pointing())
-                return nullptr;
-            return static_cast<Type*>(_ppobj->release());
-        }
-
         PROXY_PTR_NO_DISCARD bool alive() const {
             return _is_Pointing() && _ppobj->alive() && _ppobj->get();
         }
@@ -387,6 +381,12 @@ namespace proxy {
         void proxy_delete() {
             if (this->_is_Pointing())
                 this->_state()->delete_ptr();
+        }
+
+        PROXY_PTR_NO_DISCARD Type* proxy_release() {
+            if (!this->_is_Pointing())
+                return nullptr;
+            return static_cast<Type*>(this->_state()->release());
         }
     };
 

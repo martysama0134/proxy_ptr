@@ -117,3 +117,4 @@ obj.proxy_delete();                                // manager deletes
 | `cast_result.proxy_delete()`        | `owner.proxy_delete()`                     | casts return observers       |
 | `proxy_from_this().proxy_delete()`  | `obj.proxy_delete()` or `owner.proxy_delete()` | was broken before anyway |
 | container `it->second.proxy_delete()`| store `proxy_owner_ptr<T>` in container   | same call, different type    |
+| `observer.proxy_release()`          | `owner.proxy_release()`                    | only owner can release       |
