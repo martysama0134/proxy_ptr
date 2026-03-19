@@ -88,11 +88,21 @@ namespace proxy {
            public:
             _proxy_common_state_base(void* p) : _ptr(p) { _alive = true; }
 
-            void inc_ref() { _ref_count++; }
+            void inc_ref() {
+                if constexpr (std::is_same_v<AtomicType, proxy_atomic>) {
+                    _ref_count.fetch_add(1, std::memory_order_relaxed);
+                } else {
+                    ++_ref_count;
+                }
+            }
             bool dec_ref() {
                 if (_ref_count == 0)
                     return false;
-                return --_ref_count != 0;
+                if constexpr (std::is_same_v<AtomicType, proxy_atomic>) {
+                    return _ref_count.fetch_sub(1, std::memory_order_acq_rel) != 1;
+                } else {
+                    return --_ref_count != 0;
+                }
             }
 
             bool alive() const { return _alive; }
