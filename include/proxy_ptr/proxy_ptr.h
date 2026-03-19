@@ -261,7 +261,11 @@ namespace proxy {
             return static_cast<Type*>(_ppobj->get());
         }
 
-        PROXY_PTR_NO_DISCARD Type* get() const { return alive() ? hashkey() : nullptr; }
+        PROXY_PTR_NO_DISCARD Type* get() const {
+            if (!_is_Pointing() || !_ppobj->alive() || !_ppobj->get())
+                return nullptr;
+            return static_cast<Type*>(_ppobj->get());
+        }
 
         template <class Type2 = Type,
                   class = std::enable_if_t<!PROXY_PTR_IS_ARRAY(Type2)>>
