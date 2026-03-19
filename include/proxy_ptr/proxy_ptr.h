@@ -193,7 +193,7 @@ namespace proxy {
             other._ppobj = nullptr;
         }
         explicit proxy_ptr(Type* r) {
-            using deleter_type = std::default_delete<Type>;
+            using deleter_type = std::default_delete<_RTy>;
             using common_ptr_type =
                 detail::_proxy_common_state<Type, deleter_type, AtomicTypeFlag>;
             _detach(new common_ptr_type(r));

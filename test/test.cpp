@@ -329,6 +329,18 @@ TEST_CASE("make_proxy with array type") {
     CHECK(arr.expired());
 }
 
+TEST_CASE("array proxy uses array delete") {
+    // Allocates with new[], must delete with delete[] (not scalar delete)
+    auto arr = proxy::make_proxy<int[]>(50);
+    proxy::proxy_ptr<int[]> obs = arr;
+
+    CHECK(arr.alive());
+    CHECK(obs.alive());
+
+    arr.proxy_delete();
+    CHECK(obs.expired());
+}
+
 // ── Weakref debugging ───────────────────────────────────────────────────────
 
 TEST_CASE("_is_weakref distinguishes owner from proxy_from_this") {
