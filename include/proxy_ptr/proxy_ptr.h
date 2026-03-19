@@ -22,6 +22,7 @@
     #include <atomic>
     #include <cstdint>
     #include <memory>
+    #include <utility>
 
     #define PROXY_PTR_NO_DISCARD [[nodiscard]]
     #define PROXY_PTR_UNUSED(v) ((void)v)
@@ -438,8 +439,8 @@ namespace proxy {
     namespace detail {
         template <class Ty, class Atomic> struct make_proxy {
             template <class... args>
-            static proxy_owner_ptr<Ty, Atomic> construct(const args&... va) {
-                return proxy_owner_ptr<Ty, Atomic>{new Ty(va...)};
+            static proxy_owner_ptr<Ty, Atomic> construct(args&&... va) {
+                return proxy_owner_ptr<Ty, Atomic>{new Ty(std::forward<args>(va)...)};
             }
         };
 
@@ -452,23 +453,25 @@ namespace proxy {
 
     template <class Ty, class... Args>
     PROXY_PTR_NO_DISCARD std::enable_if_t<detail::is_proxy_valid_type<Ty>, proxy_owner_ptr<Ty>>
-    make_proxy(const Args&... Arguments) {
+    make_proxy(Args&&... Arguments) {
         return detail::make_proxy<Ty, proxy_non_atomic>::construct(
-            Arguments...);
+            std::forward<Args>(Arguments)...);
     }
 
     template <class Ty, class... Args>
     PROXY_PTR_NO_DISCARD std::enable_if_t<detail::is_proxy_valid_type<Ty>,
                      proxy_owner_ptr<Ty, proxy_atomic>>
-    make_proxy_atomic(const Args&... Arguments) {
-        return detail::make_proxy<Ty, proxy_atomic>::construct(Arguments...);
+    make_proxy_atomic(Args&&... Arguments) {
+        return detail::make_proxy<Ty, proxy_atomic>::construct(
+            std::forward<Args>(Arguments)...);
     }
 
     template <class Type, class AtomicType> struct proxy_factory {
         template <class... args>
         PROXY_PTR_NO_DISCARD static proxy::proxy_owner_ptr<Type, AtomicType> make(
-            const args&... arg) {
-            return detail::make_proxy<Type, AtomicType>::construct(arg...);
+            args&&... arg) {
+            return detail::make_proxy<Type, AtomicType>::construct(
+                std::forward<args>(arg)...);
         }
     };
 
