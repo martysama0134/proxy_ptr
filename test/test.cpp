@@ -198,6 +198,15 @@ TEST_CASE("static_pointer_cast preserves state") {
     CHECK(d.expired());
 }
 
+TEST_CASE("static_pointer_cast works with atomic proxies") {
+    auto d = proxy::make_proxy_atomic<Derived>();
+    auto b = proxy::static_pointer_cast<Base>(d);
+
+    CHECK(b.alive());
+    d.proxy_delete();
+    CHECK(b.expired());
+}
+
 TEST_CASE("dynamic_pointer_cast succeeds for correct type") {
     auto d = proxy::make_proxy<Derived>();
     auto b = proxy::static_pointer_cast<Base>(d);

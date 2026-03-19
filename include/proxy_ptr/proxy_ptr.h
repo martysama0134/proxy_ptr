@@ -412,21 +412,21 @@ namespace proxy {
         }
     };
 
-    template <class T, class U>
-    PROXY_PTR_NO_DISCARD proxy::proxy_ptr<T> static_pointer_cast(
-        const proxy::proxy_ptr<U>& r) noexcept;
+    template <class T, class U, class A = proxy_non_atomic>
+    PROXY_PTR_NO_DISCARD proxy::proxy_ptr<T, A> static_pointer_cast(
+        const proxy::proxy_ptr<U, A>& r) noexcept;
 
-    template <class T, class U>
-    PROXY_PTR_NO_DISCARD proxy::proxy_ptr<T> dynamic_pointer_cast(
-        const proxy::proxy_ptr<U>& r) noexcept;
+    template <class T, class U, class A = proxy_non_atomic>
+    PROXY_PTR_NO_DISCARD proxy::proxy_ptr<T, A> dynamic_pointer_cast(
+        const proxy::proxy_ptr<U, A>& r) noexcept;
 
-    template <class T, class U>
-    PROXY_PTR_NO_DISCARD proxy::proxy_ptr<T> const_pointer_cast(
-        const proxy::proxy_ptr<U>& r) noexcept;
+    template <class T, class U, class A = proxy_non_atomic>
+    PROXY_PTR_NO_DISCARD proxy::proxy_ptr<T, A> const_pointer_cast(
+        const proxy::proxy_ptr<U, A>& r) noexcept;
 
-    template <class T, class U>
-    PROXY_PTR_NO_DISCARD proxy::proxy_ptr<T> reinterpret_pointer_cast(
-        const proxy::proxy_ptr<U>& r) noexcept;
+    template <class T, class U, class A = proxy_non_atomic>
+    PROXY_PTR_NO_DISCARD proxy::proxy_ptr<T, A> reinterpret_pointer_cast(
+        const proxy::proxy_ptr<U, A>& r) noexcept;
 
     template <class Type> class proxy_parent_base {
        public:
@@ -484,34 +484,34 @@ namespace proxy {
         }
     };
 
-    template <class T, class U>
-    PROXY_PTR_NO_DISCARD proxy::proxy_ptr<T> static_pointer_cast(
-        const proxy::proxy_ptr<U>& r) noexcept {
-        auto p = static_cast<typename proxy::proxy_ptr<T>::Type*>(r.get());
-        return proxy::proxy_ptr<T>{p, r};
+    template <class T, class U, class A>
+    PROXY_PTR_NO_DISCARD proxy::proxy_ptr<T, A> static_pointer_cast(
+        const proxy::proxy_ptr<U, A>& r) noexcept {
+        auto p = static_cast<typename proxy::proxy_ptr<T, A>::Type*>(r.get());
+        return proxy::proxy_ptr<T, A>{p, r};
     }
 
-    template <class T, class U>
-    PROXY_PTR_NO_DISCARD proxy::proxy_ptr<T> dynamic_pointer_cast(
-        const proxy::proxy_ptr<U>& r) noexcept {
-        if (auto p = dynamic_cast<typename proxy::proxy_ptr<T>::Type*>(r.get()))
-            return proxy::proxy_ptr<T>{p, r};
+    template <class T, class U, class A>
+    PROXY_PTR_NO_DISCARD proxy::proxy_ptr<T, A> dynamic_pointer_cast(
+        const proxy::proxy_ptr<U, A>& r) noexcept {
+        if (auto p = dynamic_cast<typename proxy::proxy_ptr<T, A>::Type*>(r.get()))
+            return proxy::proxy_ptr<T, A>{p, r};
         else
-            return proxy::proxy_ptr<T>{};
+            return proxy::proxy_ptr<T, A>{};
     }
 
-    template <class T, class U>
-    PROXY_PTR_NO_DISCARD proxy::proxy_ptr<T> const_pointer_cast(
-        const proxy::proxy_ptr<U>& r) noexcept {
-        auto p = const_cast<typename proxy::proxy_ptr<T>::Type*>(r.get());
-        return proxy::proxy_ptr<T>{p, r};
+    template <class T, class U, class A>
+    PROXY_PTR_NO_DISCARD proxy::proxy_ptr<T, A> const_pointer_cast(
+        const proxy::proxy_ptr<U, A>& r) noexcept {
+        auto p = const_cast<typename proxy::proxy_ptr<T, A>::Type*>(r.get());
+        return proxy::proxy_ptr<T, A>{p, r};
     }
 
-    template <class T, class U>
-    PROXY_PTR_NO_DISCARD proxy::proxy_ptr<T> reinterpret_pointer_cast(
-        const proxy::proxy_ptr<U>& r) noexcept {
-        auto p = reinterpret_cast<typename proxy::proxy_ptr<T>::Type*>(r.get());
-        return proxy::proxy_ptr<T>{p, r};
+    template <class T, class U, class A>
+    PROXY_PTR_NO_DISCARD proxy::proxy_ptr<T, A> reinterpret_pointer_cast(
+        const proxy::proxy_ptr<U, A>& r) noexcept {
+        auto p = reinterpret_cast<typename proxy::proxy_ptr<T, A>::Type*>(r.get());
+        return proxy::proxy_ptr<T, A>{p, r};
     }
 
 }  // namespace proxy
