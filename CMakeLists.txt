@@ -30,4 +30,9 @@ if(PROXY_PTR_BUILD_TESTS)
 
     include(${doctest_SOURCE_DIR}/scripts/cmake/doctest.cmake)
     doctest_discover_tests(proxy_ptr_tests)
+
+    # Benchmark (not part of ctest, run manually)
+    add_executable(proxy_ptr_bench test/bench.cpp)
+    target_link_libraries(proxy_ptr_bench PRIVATE proxy_ptr)
+    target_compile_features(proxy_ptr_bench PRIVATE cxx_std_17)
 endif()
