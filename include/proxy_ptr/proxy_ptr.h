@@ -289,7 +289,7 @@ namespace proxy {
         }
 
         decltype(auto) operator=(const proxy_ptr<Type, AtomicTypeFlag>& r) {
-            _detach(r._ppobj);
+            _proxy_from(r);
             return (*this);
         }
 

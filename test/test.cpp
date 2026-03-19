@@ -67,6 +67,21 @@ TEST_CASE("proxy_ptr copy keeps both alive") {
     CHECK(a.get() == b.get());
 }
 
+TEST_CASE("self-assignment does not corrupt state") {
+    auto owner = proxy::make_proxy<int>(77);
+    proxy::proxy_ptr<int> obs = owner;
+
+    // self-assign observer (was UAF when refcount == 1)
+    obs = obs;
+    CHECK(obs.alive());
+    CHECK(*obs.get() == 77);
+
+    // self-assign via another reference
+    proxy::proxy_ptr<int>& ref = obs;
+    obs = ref;
+    CHECK(obs.alive());
+}
+
 // ── Null / default state ────────────────────────────────────────────────────
 
 TEST_CASE("default-constructed proxy_ptr is expired") {
