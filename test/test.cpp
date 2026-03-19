@@ -405,6 +405,21 @@ TEST_CASE("custom deleter is called on proxy_delete") {
     CHECK(owner.expired());
 }
 
+TEST_CASE("lambda deleter works (non-default-constructible)") {
+    bool deleted = false;
+    auto deleter = [&deleted](int* p) {
+        deleted = true;
+        delete p;
+    };
+    auto owner = proxy::proxy_owner_ptr<int>(new int(7), deleter);
+    CHECK(owner.alive());
+    CHECK_FALSE(deleted);
+
+    owner.proxy_delete();
+    CHECK(deleted);
+    CHECK(owner.expired());
+}
+
 // ── Same-state assignment ───────────────────────────────────────────────────
 
 TEST_CASE("assign between observers of same state is safe") {

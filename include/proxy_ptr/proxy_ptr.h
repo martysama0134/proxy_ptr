@@ -130,9 +130,8 @@ namespace proxy {
             _proxy_common_state(Type* ptr)
                 : _proxy_common_state_base<AtomicType>(ptr) {}
             _proxy_common_state(Type* ptr, const Dex& dx)
-                : _proxy_common_state_base<AtomicType>(ptr) {
-                static_cast<Dex&>(*this) = dx;
-            }
+                : Dex(dx),
+                  _proxy_common_state_base<AtomicType>(ptr) {}
 
             bool is_weak() const override {
                 using WeakDeleter = detail::non_deleter<Type>;
