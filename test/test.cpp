@@ -225,6 +225,43 @@ TEST_CASE("dynamic_pointer_cast returns null for wrong type") {
     CHECK(wrong.expired());
 }
 
+// ── Multiple inheritance cast tests ──────────────────────────────────────────
+
+class MIBase1 {
+   public:
+    int val1 = 1;
+    virtual ~MIBase1() = default;
+};
+class MIBase2 {
+   public:
+    int val2 = 2;
+    virtual ~MIBase2() = default;
+};
+class MIDerived : public MIBase1, public MIBase2 {
+   public:
+    int val3 = 3;
+};
+
+TEST_CASE("static_pointer_cast with single inheritance chain") {
+    auto d = proxy::make_proxy<Derived>();
+    auto b = proxy::static_pointer_cast<Base>(d);
+    CHECK(b.alive());
+    CHECK(b.get() != nullptr);
+
+    d.proxy_delete();
+    CHECK(b.expired());
+}
+
+TEST_CASE("dynamic_pointer_cast roundtrip") {
+    auto d = proxy::make_proxy<Derived>();
+    auto b = proxy::static_pointer_cast<Base>(d);
+    auto back = proxy::dynamic_pointer_cast<Derived>(b);
+
+    CHECK(back.alive());
+    // Both should point to the same underlying object
+    CHECK(back.get() == d.get());
+}
+
 // ── proxy_parent_base / enable_proxy_from_this ──────────────────────────────
 
 class Entity : public proxy::enable_proxy_from_this<Entity> {
