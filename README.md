@@ -22,6 +22,27 @@ Performance vs `std::shared_ptr` (MSVC x64 `/O2`, `test/bench.cpp`):
 | `alive()` check | ~1.5x slower | — |
 | Create + delete | ~1.9x slower (two allocations) | — |
 
+## Why not `shared_ptr` / `weak_ptr`?
+
+`shared_ptr` answers "who keeps this alive?". A manager needs "who decides when it dies, and how does everyone else find out?". With `shared_ptr`, every holder co-owns the object, so a forgotten reference keeps a logically destroyed object alive.
+
+The fair comparison is a `shared_ptr` held only by the manager plus `weak_ptr` everywhere else:
+
+| | `weak_ptr` | `proxy_ptr` observer |
+|---|---|---|
+| Use the object | `if (auto p = w.lock()) p->f();` at every use site | `p->f()` — same syntax as a raw pointer, so retrofitting existing code is mostly a typedef change |
+| Owner deletes while someone is using it | deletion is deferred until the `lock()` temporary dies | deletion happens now; observers see `nullptr` |
+| Cost of using it | atomic increment/decrement per `lock()` | no reference-count traffic to dereference (non-atomic mode) |
+| Hashing / `==` / keyed containers | not provided (only `owner_before`) | by address, and still findable after the object dies |
+| `this` → handle | `shared_from_this()`: only for `shared_ptr`-owned objects, throws in constructors | `enable_proxy_from_this`: works for stack, member, `new`-ed and `make_proxy` objects |
+
+What `proxy_ptr` does **not** give you:
+- **It doesn't prevent use-after-delete; it makes it deterministic.** Using a dead observer dereferences `nullptr` (and asserts in debug builds) instead of silently corrupting memory. Check `alive()` or re-resolve where an object may have died.
+- **No cross-thread use.** Atomic mode only makes the reference count atomic.
+- **Comparing addresses can still match a new object** allocated at the same address (ABA). Treat `expired()` as "changed".
+
+For new code, `weak_ptr` or ID handles are equally valid choices. `proxy_ptr` fits single-threaded, manager-owned objects, especially existing raw-pointer code that needs safe observers without rewriting every use site.
+
 ## Features
 
 - **`proxy_owner_ptr<T>`** — move-only owning pointer, the only type that can call `proxy_delete()`. Converts implicitly to a `proxy_ptr<T>` observer copy; it is not a subclass, so it never binds to `proxy_ptr<T>&`
