@@ -86,14 +86,53 @@ derived_owner.proxy_delete();
 auto p = obj.proxy_from_this();
 p.proxy_delete();   // only set _alive=false, did NOT free memory
 
-// AFTER — call proxy_delete on the object itself (proxy_parent_base method)
-obj.proxy_delete();             // if obj is a stack/member variable
-owner_ptr->proxy_delete();      // if obj was created via make_proxy
-// OR call proxy_delete on the owner that holds the heap allocation:
-owner_ptr.proxy_delete();       // frees memory + invalidates all proxies
+// AFTER
+obj.proxy_delete();             // stack/member object: expires its proxy_from_this() observers
+owner_ptr.proxy_delete();       // make_proxy object: frees memory + expires every observer
+
+// NEVER: owner_ptr->proxy_delete() or observer->proxy_delete()
+// It compiles (it reaches the object's proxy_parent_base::proxy_delete()), but on a
+// make_proxy object it only expires the proxy_from_this() observers: observers taken
+// from the owner stay alive() and the object is never freed.
 ```
 
-### 6. LP* typedefs pattern (game server / manager pattern)
+### 6. Up-casts are implicit
+
+```cpp
+// BEFORE
+f_takes_base(derived->proxy_from_this());               // or static_pointer_cast<Base>(derived)
+
+// AFTER — proxy_ptr<Derived> and proxy_owner_ptr<Derived> convert to proxy_ptr<Base>
+f_takes_base(derived);                                  // address-adjusted for multiple inheritance
+```
+
+Down-casts stay explicit (`static_pointer_cast` / `dynamic_pointer_cast`). The old explicit
+forms still compile, so existing up-casts can be removed gradually.
+
+Two limitations, both shared with `std::shared_ptr`:
+
+- **Overloads on base and derived handles.** Passing a `proxy_owner_ptr<Derived>` to
+  `f(proxy_ptr<Base>)` / `f(proxy_ptr<Derived>)` is ambiguous: both need a user-defined
+  conversion from the owner. Pass the observer you mean: `f(proxy_ptr<Derived>(owner))`.
+- **Forward-declared types.** The up-cast check is evaluated once per translation unit. If
+  it is first evaluated while `Derived` is only forward-declared, it stays false for that
+  translation unit, and a later up-cast fails to compile. Include `Derived`'s definition
+  before the first up-cast (a raw `Derived*` -> `Base*` conversion needs it too).
+
+### 7. Handles cannot be built from raw pointers
+
+```cpp
+// BEFORE — compiled, and created a second owning control block
+proxy_ptr<Foo> p(raw_foo);
+set_of_handles.emplace(this);
+
+// AFTER — compile error; use the owner, This() / proxy_from_this(), or make_proxy
+```
+
+Only `proxy_owner_ptr` (and so `make_proxy`) can build a handle from a raw pointer. A raw-pointer
+observer would have owned a second control block and deleted the object behind its real owner.
+
+### 8. LP* typedefs pattern (game server / manager pattern)
 
 ```cpp
 // BEFORE
@@ -124,5 +163,8 @@ obj.proxy_delete();                                // manager deletes
 | `copy.proxy_delete()`               | `owner.proxy_delete()`                     | only owner can delete        |
 | `cast_result.proxy_delete()`        | `owner.proxy_delete()`                     | casts return observers       |
 | `proxy_from_this().proxy_delete()`  | `obj.proxy_delete()` or `owner.proxy_delete()` | was broken before anyway |
+| `owner->proxy_delete()`             | `owner.proxy_delete()`                     | `->` frees nothing on make_proxy objects |
+| `f(derived->proxy_from_this())`     | `f(derived)`                               | up-casts are implicit        |
+| `proxy_ptr<T> p(raw)` / `emplace(this)` | owner / `This()` / `make_proxy`        | raw construction is owner-only |
 | container `it->second.proxy_delete()`| store `proxy_owner_ptr<T>` in container   | same call, different type    |
 | `observer.proxy_release()`          | `owner.proxy_release()`                    | only owner can release       |

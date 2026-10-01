@@ -417,6 +417,66 @@ TEST_CASE("only up-casts are implicit") {
                                 proxy::proxy_ptr<Base>>);
 }
 
+struct VBase {
+    int v = 1;
+    virtual ~VBase() = default;
+};
+struct VMid : virtual VBase {
+    int m = 2;
+};
+struct VDerived : VMid {
+    int d = 3;
+};
+
+TEST_CASE("upcast through a virtual base") {
+    auto d = proxy::make_proxy<VDerived>();
+    proxy::proxy_ptr<VDerived> obs = d;
+
+    proxy::proxy_ptr<VBase> up = obs;
+    CHECK(up.get() == static_cast<VBase*>(d.get()));
+    CHECK(up->v == 1);
+
+    d.proxy_delete();
+    CHECK(up.expired());
+
+    // a virtual-base conversion would read the deleted object, so an expired
+    // source up-casts to an empty key instead
+    proxy::proxy_ptr<VBase> late = obs;
+    CHECK(late.expired());
+    CHECK(late.hashkey() == nullptr);
+}
+
+TEST_CASE("erase by handle from a base-keyed set after expiry") {
+    auto d = proxy::make_proxy<MIDerived>();
+    proxy::proxy_ptr<MIDerived> obs = d;
+    std::unordered_set<proxy::proxy_ptr<MIBase2>> s;
+    s.insert(obs);
+
+    d.proxy_delete();
+    CHECK(s.erase(obs) == 1);  // the up-cast of the expired observer keeps its key
+    CHECK(s.empty());
+}
+
+TEST_CASE("up-casts never drop const") {
+    CHECK_FALSE(std::is_convertible_v<proxy::proxy_ptr<const int>, proxy::proxy_ptr<int>>);
+    CHECK_FALSE(std::is_convertible_v<const proxy::proxy_owner_ptr<const Derived>&,
+                                      proxy::proxy_ptr<Base>>);
+}
+
+TEST_CASE("assignment from a derived handle") {
+    auto d = proxy::make_proxy<Derived>();
+    proxy::proxy_ptr<Derived> obs = d;
+    proxy::proxy_ptr<Base> b;
+
+    b = obs;
+    CHECK(b.get() == static_cast<Base*>(d.get()));
+    b = d;  // straight from the owner
+    CHECK(b.alive());
+
+    d.proxy_delete();
+    CHECK(b.expired());
+}
+
 // ── proxy_parent_base / enable_proxy_from_this ──────────────────────────────
 
 class Entity : public proxy::enable_proxy_from_this<Entity> {
