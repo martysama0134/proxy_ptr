@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [proxy, feature/**]
+    branches: [main, feature/**]
   pull_request:
-    branches: [proxy]
+    branches: [main]
 
 jobs:
   build:
