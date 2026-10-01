@@ -263,20 +263,6 @@ namespace proxy {
             other._ppobj = nullptr;
             other._ptr = nullptr;
         }
-        explicit proxy_ptr(Type* r) {
-            using deleter_type = std::default_delete<_RTy>;
-            using common_ptr_type =
-                detail::_proxy_common_state<Type, deleter_type, AtomicTypeFlag>;
-            _detach(new common_ptr_type(r), r);
-        }
-        template <class Dex, std::enable_if_t<
-                                 detail::is_valid_deleter<Type, Dex>, int> = 0>
-        explicit proxy_ptr(Type* r, Dex dx) {
-            using common_ptr_type =
-                detail::_proxy_common_state<Type, Dex, AtomicTypeFlag>;
-            _detach(new common_ptr_type(r, std::move(dx)), r);
-        }
-
         template <
             class Type2,
             std::enable_if_t<detail::is_proxy_valid_cast<Type, Type2>, int> = 0>
@@ -392,6 +378,25 @@ namespace proxy {
         }
 
        private:
+        // Owning constructors: reachable only through proxy_owner_ptr (and so
+        // make_proxy). A public one would let direct-init (emplace(this),
+        // pair conversions) build a second owning block behind the real owner.
+        template <class, class, class> friend class proxy_owner_ptr;
+
+        explicit proxy_ptr(Type* r) {
+            using deleter_type = std::default_delete<_RTy>;
+            using common_ptr_type =
+                detail::_proxy_common_state<Type, deleter_type, AtomicTypeFlag>;
+            _detach(new common_ptr_type(r), r);
+        }
+        template <class Dex, std::enable_if_t<
+                                 detail::is_valid_deleter<Type, Dex>, int> = 0>
+        explicit proxy_ptr(Type* r, Dex dx) {
+            using common_ptr_type =
+                detail::_proxy_common_state<Type, Dex, AtomicTypeFlag>;
+            _detach(new common_ptr_type(r, std::move(dx)), r);
+        }
+
         _common_PtrType* _ppobj = nullptr;
         Type* _ptr = nullptr;
     };

@@ -2,6 +2,7 @@
 #include <proxy_ptr/proxy_ptr.h>
 
 #include <set>
+#include <vector>
 #include <string>
 #include <unordered_set>
 
@@ -74,6 +75,23 @@ TEST_CASE("owner does not bind to observer reference") {
                                 proxy::proxy_ptr<int>>);
     CHECK(std::is_convertible_v<const proxy::proxy_owner_ptr<int>&,
                                 const proxy::proxy_ptr<int>&>);
+}
+
+TEST_CASE("observers cannot be built from raw pointers") {
+    // a raw-pointer observer would own a second control block: emplace(this)
+    // into a container of observers would delete the object behind its owner
+    struct Deleter {
+        void operator()(int* p) const { delete p; }
+    };
+    CHECK_FALSE(std::is_constructible_v<proxy::proxy_ptr<int>, int*>);
+    CHECK_FALSE(std::is_constructible_v<proxy::proxy_ptr<int>, int*, Deleter>);
+    CHECK(std::is_constructible_v<proxy::proxy_owner_ptr<int>, int*>);
+    CHECK(std::is_constructible_v<proxy::proxy_owner_ptr<int>, int*, Deleter>);
+
+    std::vector<proxy::proxy_ptr<int>> v;
+    auto owner = proxy::make_proxy<int>(1);
+    v.emplace_back(owner);
+    CHECK(v.front().get() == owner.get());
 }
 
 TEST_CASE("owner compares like its observers") {
