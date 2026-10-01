@@ -27,6 +27,7 @@ Performance vs `std::shared_ptr` (MSVC x64 `/O2`, `test/bench.cpp`):
 - **`proxy_owner_ptr<T>`** — move-only owning pointer, the only type that can call `proxy_delete()`. Converts implicitly to a `proxy_ptr<T>` observer copy; it is not a subclass, so it never binds to `proxy_ptr<T>&`
 - **`proxy_ptr<T>`** — copyable observer that tracks whether the pointed-to object is still alive
 - **Custom deleters** — function objects, lambdas, function pointers
+- **Implicit up-casts** — `proxy_ptr<Derived>` and `proxy_owner_ptr<Derived>` convert to `proxy_ptr<Base>` (address-adjusted for multiple inheritance); down-casts stay explicit via `static_pointer_cast` / `dynamic_pointer_cast`
 - **`enable_proxy_from_this<T>`** — CRTP base class for objects that generate proxy observers
 - **Atomic mode** — `make_proxy_atomic<T>()` for thread-safe reference counting
 - **Pointer casts** — `static_pointer_cast`, `dynamic_pointer_cast`, `const_pointer_cast`, `reinterpret_pointer_cast`

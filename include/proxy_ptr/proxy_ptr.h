@@ -231,7 +231,17 @@ namespace proxy {
         template <class L, class R>
         using enable_if_handles =
             std::enable_if_t<is_proxy_handle<L> && is_proxy_handle<R>, int>;
+
+        // Derived -> Base (or T -> const T) without an explicit cast, like shared_ptr.
+        template <class From, class To>
+        constexpr bool is_proxy_upcast =
+            !PROXY_PTR_IS_ARRAY(From) && !PROXY_PTR_IS_ARRAY(To) &&
+            !std::is_same_v<From, To> && std::is_convertible_v<From*, To*>;
     }  // namespace detail
+
+    template <class _RTy, class AtomicTypeFlag = proxy_non_atomic,
+              class = detail::enable_valid_atomic_flag<AtomicTypeFlag>>
+    class proxy_owner_ptr;
 
     template <class _RTy, class AtomicTypeFlag = proxy_non_atomic,
               class = detail::enable_valid_atomic_flag<AtomicTypeFlag>>
@@ -274,6 +284,24 @@ namespace proxy {
                            const proxy_ptr<Type2, AtomicTypeFlag>& other) {
             _detach(other._state(), ptr);
         }
+
+        // Implicit up-casts. Pure-offset conversions keep an expired source's
+        // identity (hashkey); a virtual-base conversion would read the deleted
+        // object, so it only uses the live pointer.
+        template <class Y,
+                  std::enable_if_t<detail::is_proxy_upcast<Y, _RTy>, int> = 0>
+        proxy_ptr(const proxy_ptr<Y, AtomicTypeFlag>& other) {
+            if constexpr (detail::is_offset_cast<std::remove_cv_t<Type>,
+                                                 std::remove_cv_t<Y>>)
+                _detach(other._state(), other.hashkey());
+            else
+                _detach(other._state(), other.get());
+        }
+
+        template <class Y,
+                  std::enable_if_t<detail::is_proxy_upcast<Y, _RTy>, int> = 0>
+        proxy_ptr(const proxy_owner_ptr<Y, AtomicTypeFlag>& other)
+            : proxy_ptr(static_cast<const proxy_ptr<Y, AtomicTypeFlag>&>(other)) {}
 
         explicit operator bool() const { return alive(); }
         explicit operator Type*() const { return get(); }
@@ -373,8 +401,7 @@ namespace proxy {
     // bind to proxy_ptr& (assigning through that reference would retarget the
     // owner) and moving it into a proxy_ptr must not strip its ownership.
     // Converts implicitly to a proxy_ptr<T> observer copy.
-    template <class _RTy, class AtomicTypeFlag = proxy_non_atomic,
-              class = detail::enable_valid_atomic_flag<AtomicTypeFlag>>
+    template <class _RTy, class AtomicTypeFlag, class>
     class proxy_owner_ptr {
         using observer = proxy_ptr<_RTy, AtomicTypeFlag>;
 

@@ -352,6 +352,53 @@ TEST_CASE("const_pointer_cast of expired proxy keeps identity") {
     CHECK(back.hashkey() == c.hashkey());
 }
 
+TEST_CASE("proxy_ptr upcasts implicitly to a non-first base") {
+    auto d = proxy::make_proxy<MIDerived>();
+    proxy::proxy_ptr<MIDerived> obs = d;
+
+    proxy::proxy_ptr<MIBase2> from_obs = obs;
+    proxy::proxy_ptr<MIBase2> from_owner = d;
+    CHECK(from_obs.get() == static_cast<MIBase2*>(d.get()));
+    CHECK(from_owner.get() == static_cast<MIBase2*>(d.get()));
+    CHECK(from_obs->val2 == 2);
+
+    d.proxy_delete();
+    CHECK(from_obs.expired());
+    CHECK(from_owner.expired());
+}
+
+TEST_CASE("upcast of expired observer keeps identity") {
+    auto d = proxy::make_proxy<MIDerived>();
+    proxy::proxy_ptr<MIDerived> obs = d;
+    auto live = proxy::static_pointer_cast<MIBase2>(d);
+    d.proxy_delete();
+
+    proxy::proxy_ptr<MIBase2> up = obs;
+    CHECK(up.expired());
+    CHECK(up == live);
+}
+
+TEST_CASE("upcast feeds base parameters and base-keyed sets") {
+    auto take = [](proxy::proxy_ptr<Base> b) { return b.alive(); };
+    auto d = proxy::make_proxy<Derived>();
+    proxy::proxy_ptr<Derived> obs = d;
+
+    CHECK(take(obs));
+    CHECK(take(d));
+
+    std::unordered_set<proxy::proxy_ptr<Base>> s;
+    s.insert(obs);
+    CHECK(s.count(proxy::static_pointer_cast<Base>(d)) == 1);
+}
+
+TEST_CASE("only up-casts are implicit") {
+    CHECK_FALSE(std::is_convertible_v<proxy::proxy_ptr<Base>, proxy::proxy_ptr<Derived>>);
+    CHECK_FALSE(std::is_convertible_v<proxy::proxy_ptr<MIBase1>, proxy::proxy_ptr<MIBase2>>);
+    CHECK(std::is_convertible_v<proxy::proxy_ptr<int>, proxy::proxy_ptr<const int>>);
+    CHECK(std::is_convertible_v<const proxy::proxy_owner_ptr<Derived>&,
+                                proxy::proxy_ptr<Base>>);
+}
+
 // ── proxy_parent_base / enable_proxy_from_this ──────────────────────────────
 
 class Entity : public proxy::enable_proxy_from_this<Entity> {
