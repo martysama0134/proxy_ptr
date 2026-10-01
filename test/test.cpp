@@ -57,6 +57,44 @@ TEST_CASE("proxy_owner_ptr is move-only") {
     CHECK_FALSE(a.alive());  // moved-from
 }
 
+TEST_CASE("moving owner into observer does not steal ownership") {
+    auto owner = proxy::make_proxy<int>(1);
+    proxy::proxy_ptr<int> obs = std::move(owner);
+
+    CHECK(owner.alive());  // still the owner: std::move only yields an observer copy
+    owner.proxy_delete();
+    CHECK(obs.expired());
+}
+
+TEST_CASE("owner does not bind to observer reference") {
+    // binding would allow `observer_ref = other` to swap the owner's target
+    CHECK_FALSE(std::is_convertible_v<proxy::proxy_owner_ptr<int>&,
+                                      proxy::proxy_ptr<int>&>);
+    CHECK(std::is_convertible_v<const proxy::proxy_owner_ptr<int>&,
+                                proxy::proxy_ptr<int>>);
+    CHECK(std::is_convertible_v<const proxy::proxy_owner_ptr<int>&,
+                                const proxy::proxy_ptr<int>&>);
+}
+
+TEST_CASE("owner compares like its observers") {
+    auto owner = proxy::make_proxy<int>(1);
+    auto other = proxy::make_proxy<int>(2);
+    proxy::proxy_ptr<int> obs = owner;
+    proxy::proxy_owner_ptr<int> empty;
+
+    CHECK((owner == obs));
+    CHECK((obs == owner));
+    CHECK((owner != other));
+    CHECK((owner == owner.get()));
+    CHECK((owner.get() == owner));
+    CHECK((owner != nullptr));
+    CHECK((nullptr != owner));
+    CHECK((empty == nullptr));
+    CHECK((owner < other) != (other < owner));
+    CHECK(static_cast<bool>(owner));
+    CHECK_FALSE(static_cast<bool>(empty));
+}
+
 TEST_CASE("proxy_ptr copy keeps both alive") {
     auto owner = proxy::make_proxy<int>(10);
     proxy::proxy_ptr<int> a = owner;
@@ -262,6 +300,58 @@ TEST_CASE("dynamic_pointer_cast roundtrip") {
     CHECK(back.get() == d.get());
 }
 
+TEST_CASE("static_pointer_cast to non-first MI base") {
+    auto d = proxy::make_proxy<MIDerived>();
+    auto b2 = proxy::static_pointer_cast<MIBase2>(d);
+
+    CHECK(b2.alive());
+    CHECK(b2.get() == static_cast<MIBase2*>(d.get()));
+    CHECK(b2->val2 == 2);
+
+    d.proxy_delete();
+    CHECK(b2.expired());
+}
+
+TEST_CASE("dynamic_pointer_cast from non-first MI base back to derived") {
+    auto d = proxy::make_proxy<MIDerived>();
+    auto b2 = proxy::static_pointer_cast<MIBase2>(d);
+    auto back = proxy::dynamic_pointer_cast<MIDerived>(b2);
+
+    CHECK(back.alive());
+    CHECK(back.get() == d.get());
+    CHECK(back->val3 == 3);
+}
+
+TEST_CASE("static_pointer_cast of expired proxy keeps identity") {
+    auto d = proxy::make_proxy<MIDerived>();
+    proxy::proxy_ptr<MIDerived> obs = d;
+    auto b2 = proxy::static_pointer_cast<MIBase2>(d);
+    d.proxy_delete();
+
+    auto up = proxy::static_pointer_cast<MIBase2>(obs);
+    CHECK(up.expired());
+    CHECK(up.hashkey() != nullptr);
+    CHECK(up == b2);
+
+    auto down = proxy::static_pointer_cast<MIDerived>(b2);
+    CHECK(down.expired());
+    CHECK(down == obs);
+
+    std::unordered_set<proxy::proxy_ptr<MIBase2>> s{b2};
+    CHECK(s.find(up) != s.end());
+}
+
+TEST_CASE("const_pointer_cast of expired proxy keeps identity") {
+    auto owner = proxy::make_proxy<int>(1);
+    proxy::proxy_ptr<const int> c = proxy::const_pointer_cast<const int>(owner);
+    owner.proxy_delete();
+
+    auto back = proxy::const_pointer_cast<int>(c);
+    CHECK(back.expired());
+    CHECK(back.hashkey() != nullptr);
+    CHECK(back.hashkey() == c.hashkey());
+}
+
 // ── proxy_parent_base / enable_proxy_from_this ──────────────────────────────
 
 class Entity : public proxy::enable_proxy_from_this<Entity> {
@@ -464,6 +554,41 @@ TEST_CASE("lambda deleter works (non-default-constructible)") {
     owner.proxy_delete();
     CHECK(deleted);
     CHECK(owner.expired());
+}
+
+static bool g_fn_deleter_called = false;
+static void fn_deleter(int* p) {
+    g_fn_deleter_called = true;
+    delete p;
+}
+
+TEST_CASE("function pointer deleter works") {
+    g_fn_deleter_called = false;
+    auto owner = proxy::proxy_owner_ptr<int>(new int(3), &fn_deleter);
+    owner.proxy_delete();
+    CHECK(g_fn_deleter_called);
+}
+
+TEST_CASE("function passed by name works as deleter") {
+    g_fn_deleter_called = false;
+    auto owner = proxy::proxy_owner_ptr<int>(new int(3), fn_deleter);
+    owner.proxy_delete();
+    CHECK(g_fn_deleter_called);
+}
+
+struct FinalDeleter final {
+    bool* called;
+    void operator()(int* p) const {
+        *called = true;
+        delete p;
+    }
+};
+
+TEST_CASE("final deleter class works") {
+    bool called = false;
+    auto owner = proxy::proxy_owner_ptr<int>(new int(3), FinalDeleter{&called});
+    owner.proxy_delete();
+    CHECK(called);
 }
 
 // ── Same-state assignment ───────────────────────────────────────────────────

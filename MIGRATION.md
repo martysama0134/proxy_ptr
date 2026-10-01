@@ -3,14 +3,21 @@
 ## What changed
 
 `proxy_ptr<T>` is now a pure observer. `proxy_delete()` has been removed from it.
-A new `proxy_owner_ptr<T>` (move-only, inherits from `proxy_ptr<T>`) is the only
+A new `proxy_owner_ptr<T>` (move-only, wraps a `proxy_ptr<T>`) is the only
 type that can call `proxy_delete()`.
 
 `make_proxy<T>()`, `make_proxy_atomic<T>()`, and `proxy_factory<T>::make()` now
 return `proxy_owner_ptr<T>` instead of `proxy_ptr<T>`.
 
 `proxy_owner_ptr<T>` implicitly converts to `proxy_ptr<T>` everywhere an observer
-is expected (function parameters, assignments, containers) — no cast needed.
+is expected (by-value / `const&` parameters, assignments, containers) — no cast needed.
+
+Two things intentionally do **not** work with an owner:
+
+- Binding to a non-const `proxy_ptr<T>&` (e.g. out-parameters). Assigning through
+  such a reference would silently retarget the owner — compile error instead.
+- Stealing ownership: `proxy_ptr<T> p = std::move(owner);` makes an observer copy;
+  `owner` stays the owner and can still `proxy_delete()`.
 
 ---
 
@@ -111,7 +118,8 @@ obj.proxy_delete();                                // manager deletes
 | Old code                            | New code                                   | Notes                        |
 |-------------------------------------|--------------------------------------------|------------------------------|
 | `auto p = make_proxy<T>()`          | unchanged — `p` is now `proxy_owner_ptr<T>`| can still call proxy_delete  |
-| `proxy_ptr<T> p = make_proxy<T>()`  | unchanged — implicit observer conversion   | loses proxy_delete ability   |
+| `proxy_ptr<T> p = make_proxy<T>()`  | unchanged — implicit observer conversion   | no owner left: object lives until last observer drops |
+| `void f(proxy_ptr<T>& out)` + owner | pass an observer, or take `const&` / value | owners don't bind to `proxy_ptr<T>&` |
 | `auto copy = owner`                 | `proxy_ptr<T> copy = owner`               | owner is move-only           |
 | `copy.proxy_delete()`               | `owner.proxy_delete()`                     | only owner can delete        |
 | `cast_result.proxy_delete()`        | `owner.proxy_delete()`                     | casts return observers       |

@@ -1,11 +1,32 @@
 # proxy_ptr
 
-A lightweight, header-only C++17 library providing non-owning observer pointers (`proxy_ptr`) and owning pointers (`proxy_owner_ptr`). Approximately **20x faster** than `std::shared_ptr` for copy-heavy workloads.
+A lightweight, header-only C++17 library for **single-owner, many-observer** pointer semantics.
+
+## The problem
+
+When a manager (scene graph, ECS, object pool, etc.) owns objects and other systems need references to them, the standard options fall short:
+
+- **`std::shared_ptr`** — gives every holder the power to keep the object alive. You lose centralized lifetime control.
+- **`std::weak_ptr`** — requires `shared_ptr` on the owning side, which you don't want.
+- **Raw pointers** — no way to know if the object was deleted. Dangling pointer bugs.
+
+`proxy_ptr` fills the gap: **only the owner can delete the object, and every observer sees it expire at once.** Observers can check `alive()` but cannot trigger deletion. It's a one-way invalidation broadcast.
+
+Deletion is explicit: call `proxy_delete()` on the owner. If the owner is destroyed without it, the object is kept until the last observer is released (observers share the control block).
+
+Performance vs `std::shared_ptr` (MSVC x64 `/O2`, `test/bench.cpp`):
+
+| Workload | proxy_ptr (non-atomic) | proxy_ptr (atomic) |
+|----------|------------------------|--------------------|
+| Copy-heavy | ~4.5x faster | ~same |
+| `alive()` check | ~1.5x slower | — |
+| Create + delete | ~1.9x slower (two allocations) | — |
 
 ## Features
 
-- **`proxy_owner_ptr<T>`** — move-only owning pointer, the only type that can call `proxy_delete()`
+- **`proxy_owner_ptr<T>`** — move-only owning pointer, the only type that can call `proxy_delete()`. Converts implicitly to a `proxy_ptr<T>` observer copy; it is not a subclass, so it never binds to `proxy_ptr<T>&`
 - **`proxy_ptr<T>`** — copyable observer that tracks whether the pointed-to object is still alive
+- **Custom deleters** — function objects, lambdas, function pointers
 - **`enable_proxy_from_this<T>`** — CRTP base class for objects that generate proxy observers
 - **Atomic mode** — `make_proxy_atomic<T>()` for thread-safe reference counting
 - **Pointer casts** — `static_pointer_cast`, `dynamic_pointer_cast`, `const_pointer_cast`, `reinterpret_pointer_cast`

@@ -25,7 +25,6 @@
     #include <utility>
 
     #define PROXY_PTR_NO_DISCARD [[nodiscard]]
-    #define PROXY_PTR_UNUSED(v) ((void)v)
     #if __cplusplus >= 201703L
         #define PROXY_PTR_IS_ARRAY(type) std::is_array_v<type>
         #define PROXY_PTR_EXTENT(type) std::extent_v<type>
@@ -119,18 +118,38 @@ namespace proxy {
         };
 
         template <class Type> struct non_deleter {
-            void operator()(Type* ptr) noexcept {}
+            void operator()(Type*) noexcept {}
+        };
+
+        // Empty, non-final deleters stay a base so EBO keeps the state small;
+        // anything else (function pointers, final or stateful classes) is a member.
+        template <class Dex, bool = std::is_empty_v<Dex> && !std::is_final_v<Dex>>
+        class _deleter_holder : private Dex {
+           protected:
+            _deleter_holder() = default;
+            explicit _deleter_holder(Dex dx) : Dex(std::move(dx)) {}
+            Dex& _deleter() { return *this; }
+        };
+
+        template <class Dex> class _deleter_holder<Dex, false> {
+           protected:
+            _deleter_holder() = default;
+            explicit _deleter_holder(Dex dx) : _dx(std::move(dx)) {}
+            Dex& _deleter() { return _dx; }
+
+           private:
+            Dex _dx{};
         };
 
         template <class Type, class Dex, class AtomicType>
         class _proxy_common_state
-            : private Dex,
+            : private _deleter_holder<Dex>,
               public _proxy_common_state_base<AtomicType> {
            public:
             _proxy_common_state(Type* ptr)
                 : _proxy_common_state_base<AtomicType>(ptr) {}
-            _proxy_common_state(Type* ptr, const Dex& dx)
-                : Dex(dx),
+            _proxy_common_state(Type* ptr, Dex dx)
+                : _deleter_holder<Dex>(std::move(dx)),
                   _proxy_common_state_base<AtomicType>(ptr) {}
 
             bool is_weak() const override {
@@ -139,7 +158,7 @@ namespace proxy {
             }
             void delete_ptr() override {
                 if (this->_ptr && this->_alive) {
-                    static_cast<Dex&>(*this)(static_cast<Type*>(this->_ptr));
+                    this->_deleter()(static_cast<Type*>(this->_ptr));
                     this->_alive = false;
                 }
             }
@@ -186,6 +205,32 @@ namespace proxy {
         template <class Ty>
         using enable_valid_atomic_flag =
             std::enable_if_t<is_valid_atomic_flag<Ty>>;
+
+        template <class To, class From, class = void>
+        struct _is_static_castable : std::false_type {};
+        template <class To, class From>
+        struct _is_static_castable<
+            To, From,
+            std::void_t<decltype(static_cast<To*>(std::declval<From*>()))>>
+            : std::true_type {};
+
+        // Castable both ways only when no virtual base lies between the types:
+        // the cast is then a pure address offset that never reads the object,
+        // so it stays meaningful after the object was deleted.
+        template <class To, class From>
+        constexpr bool is_offset_cast = _is_static_castable<To, From>::value &&
+                                        _is_static_castable<From, To>::value;
+
+        // proxy_ptr / proxy_owner_ptr (specialized once both are declared)
+        template <class Ty> struct _is_proxy_handle : std::false_type {};
+        template <class Ty>
+        constexpr bool is_proxy_handle = _is_proxy_handle<Ty>::value;
+
+        template <class H>
+        using enable_if_handle = std::enable_if_t<is_proxy_handle<H>, int>;
+        template <class L, class R>
+        using enable_if_handles =
+            std::enable_if_t<is_proxy_handle<L> && is_proxy_handle<R>, int>;
     }  // namespace detail
 
     template <class _RTy, class AtomicTypeFlag = proxy_non_atomic,
@@ -200,32 +245,26 @@ namespace proxy {
             return _ppobj;
         }
 
-       protected:
-        proxy_ptr(_common_PtrType* _ptr) {
-            _ppobj = _ptr;
-            if (_ppobj)
-                _ppobj->inc_ref();
-        }
-
-       public:
         proxy_ptr() {}
         proxy_ptr(std::nullptr_t) {}
         proxy_ptr(const proxy_ptr& n) { _proxy_from(n); }
-        proxy_ptr(proxy_ptr&& other) noexcept : _ppobj(other._ppobj) {
+        proxy_ptr(proxy_ptr&& other) noexcept
+            : _ppobj(other._ppobj), _ptr(other._ptr) {
             other._ppobj = nullptr;
+            other._ptr = nullptr;
         }
         explicit proxy_ptr(Type* r) {
             using deleter_type = std::default_delete<_RTy>;
             using common_ptr_type =
                 detail::_proxy_common_state<Type, deleter_type, AtomicTypeFlag>;
-            _detach(new common_ptr_type(r));
+            _detach(new common_ptr_type(r), r);
         }
         template <class Dex, std::enable_if_t<
                                  detail::is_valid_deleter<Type, Dex>, int> = 0>
-        explicit proxy_ptr(Type* r, const Dex& dx) {
+        explicit proxy_ptr(Type* r, Dex dx) {
             using common_ptr_type =
                 detail::_proxy_common_state<Type, Dex, AtomicTypeFlag>;
-            _detach(new common_ptr_type(r, dx));
+            _detach(new common_ptr_type(r, std::move(dx)), r);
         }
 
         template <
@@ -233,60 +272,22 @@ namespace proxy {
             std::enable_if_t<detail::is_proxy_valid_cast<Type, Type2>, int> = 0>
         explicit proxy_ptr(Type* ptr,
                            const proxy_ptr<Type2, AtomicTypeFlag>& other) {
-            // assert(other._is_Pointing());
-            PROXY_PTR_UNUSED(ptr);
-            _detach(other._state());
+            _detach(other._state(), ptr);
         }
 
         explicit operator bool() const { return alive(); }
         explicit operator Type*() const { return get(); }
 
-        template <class Type2, class AtomicType2>
-        PROXY_PTR_NO_DISCARD bool operator==(
-            const proxy::proxy_ptr<Type2, AtomicType2>& _Right) const noexcept {
-            return hashkey() == _Right.hashkey();
-        }
-
-        template <class Type2, class AtomicType2>
-        PROXY_PTR_NO_DISCARD bool operator!=(
-            const proxy::proxy_ptr<Type2, AtomicType2>& _Right) const noexcept {
-            return !(*this == _Right);
-        }
-
-        template <class Type2, class AtomicType2>
-        PROXY_PTR_NO_DISCARD bool operator<(
-            const proxy::proxy_ptr<Type2, AtomicType2>& _Right) const noexcept {
-            return hashkey() < _Right.hashkey();
-        }
-
-        template <class Type2, class AtomicType2>
-        PROXY_PTR_NO_DISCARD bool operator>=(
-            const proxy::proxy_ptr<Type2, AtomicType2>& _Right) const noexcept {
-            return !(*this < _Right);
-        }
-
-        template <class Type2, class AtomicType2>
-        PROXY_PTR_NO_DISCARD bool operator>(
-            const proxy::proxy_ptr<Type2, AtomicType2>& _Right) const noexcept {
-            return _Right < *this;
-        }
-
-        template <class Type2, class AtomicType2>
-        PROXY_PTR_NO_DISCARD bool operator<=(
-            const proxy::proxy_ptr<Type2, AtomicType2>& _Right) const noexcept {
-            return !(_Right < *this);
-        }
-
         PROXY_PTR_NO_DISCARD Type* hashkey() const {
             if (!_is_Pointing())
                 return nullptr;
-            return static_cast<Type*>(_ppobj->get());
+            return _ptr;
         }
 
         PROXY_PTR_NO_DISCARD Type* get() const {
-            if (!_is_Pointing() || !_ppobj->alive() || !_ppobj->get())
+            if (!_is_Pointing() || !_ppobj->alive())
                 return nullptr;
-            return static_cast<Type*>(_ppobj->get());
+            return _ptr;
         }
 
         template <class Type2 = Type,
@@ -320,7 +321,9 @@ namespace proxy {
                 if (_ppobj && !_ppobj->dec_ref())
                     delete _ppobj;
                 _ppobj = other._ppobj;
+                _ptr = other._ptr;
                 other._ppobj = nullptr;
+                other._ptr = nullptr;
             }
             return *this;
         }
@@ -331,7 +334,7 @@ namespace proxy {
         }
 
         PROXY_PTR_NO_DISCARD bool alive() const {
-            return _is_Pointing() && _ppobj->alive() && _ppobj->get();
+            return _is_Pointing() && _ppobj->alive() && _ptr;
         }
 
         PROXY_PTR_NO_DISCARD bool expired() const { return !alive(); }
@@ -342,35 +345,41 @@ namespace proxy {
 
        protected:
         void _proxy_from(const proxy_ptr& n) {
-            if (n._ppobj == _ppobj)
+            if (n._ppobj == _ppobj) {
+                _ptr = n._ptr;
                 return;
-            _detach(n._ppobj);
+            }
+            _detach(n._ppobj, n._ptr);
         }
         bool _is_Pointing() const { return _ppobj != nullptr; }
-        void _detach(_common_PtrType* n = nullptr) {
+        void _detach(_common_PtrType* n = nullptr, Type* p = nullptr) {
             if (_ppobj)
                 if (!_ppobj->dec_ref())
                     delete (_ppobj);
 
             _ppobj = n;
+            _ptr = p;
             if (_ppobj)
                 _ppobj->inc_ref();
         }
 
        private:
         _common_PtrType* _ppobj = nullptr;
+        Type* _ptr = nullptr;
     };
 
     // Move-only owning proxy: the only type that exposes proxy_delete().
-    // Inherits all observer functionality from proxy_ptr.
-    // Implicit conversion to proxy_ptr<T> (observer) works via base-class binding.
+    // Holds its observer by composition, not inheritance: an owner must never
+    // bind to proxy_ptr& (assigning through that reference would retarget the
+    // owner) and moving it into a proxy_ptr must not strip its ownership.
+    // Converts implicitly to a proxy_ptr<T> observer copy.
     template <class _RTy, class AtomicTypeFlag = proxy_non_atomic,
               class = detail::enable_valid_atomic_flag<AtomicTypeFlag>>
-    class proxy_owner_ptr : public proxy_ptr<_RTy, AtomicTypeFlag> {
-        using base = proxy_ptr<_RTy, AtomicTypeFlag>;
+    class proxy_owner_ptr {
+        using observer = proxy_ptr<_RTy, AtomicTypeFlag>;
 
        public:
-        using Type = typename base::Type;
+        using Type = typename observer::Type;
 
         proxy_owner_ptr() = default;
         proxy_owner_ptr(std::nullptr_t) {}
@@ -378,39 +387,75 @@ namespace proxy {
         // Move-only: no copy
         proxy_owner_ptr(const proxy_owner_ptr&) = delete;
         proxy_owner_ptr& operator=(const proxy_owner_ptr&) = delete;
-
-        proxy_owner_ptr(proxy_owner_ptr&& other) noexcept
-            : base(std::move(static_cast<base&>(other))) {}
-
-        proxy_owner_ptr& operator=(proxy_owner_ptr&& other) noexcept {
-            base::operator=(std::move(static_cast<base&>(other)));
-            return *this;
-        }
+        proxy_owner_ptr(proxy_owner_ptr&&) noexcept = default;
+        proxy_owner_ptr& operator=(proxy_owner_ptr&&) noexcept = default;
 
         proxy_owner_ptr& operator=(std::nullptr_t) {
-            base::operator=(nullptr);
+            _obs = nullptr;
             return *this;
         }
 
         // Owning constructors (raw pointer with default or custom deleter)
-        explicit proxy_owner_ptr(Type* r) : base(r) {}
+        explicit proxy_owner_ptr(Type* r) : _obs(r) {}
 
         template <class Dex,
                   std::enable_if_t<detail::is_valid_deleter<Type, Dex>, int> = 0>
-        explicit proxy_owner_ptr(Type* r, const Dex& dx) : base(r, dx) {}
+        explicit proxy_owner_ptr(Type* r, Dex dx) : _obs(r, std::move(dx)) {}
+
+        operator const observer&() const noexcept { return _obs; }
+
+        explicit operator bool() const { return alive(); }
+        explicit operator Type*() const { return get(); }
+
+        PROXY_PTR_NO_DISCARD Type* hashkey() const { return _obs.hashkey(); }
+        PROXY_PTR_NO_DISCARD Type* get() const { return _obs.get(); }
+        PROXY_PTR_NO_DISCARD bool alive() const { return _obs.alive(); }
+        PROXY_PTR_NO_DISCARD bool expired() const { return _obs.expired(); }
+        PROXY_PTR_NO_DISCARD bool _is_weakref() const { return _obs._is_weakref(); }
+        detail::_proxy_common_state_base<AtomicTypeFlag>* _state() const {
+            return _obs._state();
+        }
+
+        template <class Type2 = Type,
+                  class = std::enable_if_t<!PROXY_PTR_IS_ARRAY(Type2)>>
+        PROXY_PTR_NO_DISCARD Type2* operator->() const {
+            return _obs.operator->();
+        }
+
+        template <class Type2 = Type,
+                  class = std::enable_if_t<PROXY_PTR_IS_ARRAY(Type2)>>
+        PROXY_PTR_NO_DISCARD Type2& operator[](std::ptrdiff_t p) const {
+            return _obs[p];
+        }
+
+        template <class Type2 = Type,
+                  class = std::enable_if_t<!PROXY_PTR_IS_ARRAY(Type2)>>
+        PROXY_PTR_NO_DISCARD Type2& operator*() const {
+            return *_obs;
+        }
 
         // The ONLY place proxy_delete() exists in the entire system
         void proxy_delete() {
-            if (this->_is_Pointing())
-                this->_state()->delete_ptr();
+            if (_state())
+                _state()->delete_ptr();
         }
 
         PROXY_PTR_NO_DISCARD Type* proxy_release() {
-            if (!this->_is_Pointing())
+            if (!_state())
                 return nullptr;
-            return static_cast<Type*>(this->_state()->release());
+            return static_cast<Type*>(_state()->release());
         }
+
+       private:
+        observer _obs;
     };
+
+    namespace detail {
+        template <class T, class A, class E>
+        struct _is_proxy_handle<proxy_ptr<T, A, E>> : std::true_type {};
+        template <class T, class A, class E>
+        struct _is_proxy_handle<proxy_owner_ptr<T, A, E>> : std::true_type {};
+    }  // namespace detail
 
     template <class T, class U, class A = proxy_non_atomic>
     PROXY_PTR_NO_DISCARD proxy::proxy_ptr<T, A> static_pointer_cast(
@@ -428,10 +473,39 @@ namespace proxy {
     PROXY_PTR_NO_DISCARD proxy::proxy_ptr<T, A> reinterpret_pointer_cast(
         const proxy::proxy_ptr<U, A>& r) noexcept;
 
+    // Casting an owner yields an observer, same as casting its proxy_ptr view.
+    template <class T, class U, class A>
+    PROXY_PTR_NO_DISCARD proxy::proxy_ptr<T, A> static_pointer_cast(
+        const proxy::proxy_owner_ptr<U, A>& r) noexcept {
+        return proxy::static_pointer_cast<T>(
+            static_cast<const proxy::proxy_ptr<U, A>&>(r));
+    }
+
+    template <class T, class U, class A>
+    PROXY_PTR_NO_DISCARD proxy::proxy_ptr<T, A> dynamic_pointer_cast(
+        const proxy::proxy_owner_ptr<U, A>& r) noexcept {
+        return proxy::dynamic_pointer_cast<T>(
+            static_cast<const proxy::proxy_ptr<U, A>&>(r));
+    }
+
+    template <class T, class U, class A>
+    PROXY_PTR_NO_DISCARD proxy::proxy_ptr<T, A> const_pointer_cast(
+        const proxy::proxy_owner_ptr<U, A>& r) noexcept {
+        return proxy::const_pointer_cast<T>(
+            static_cast<const proxy::proxy_ptr<U, A>&>(r));
+    }
+
+    template <class T, class U, class A>
+    PROXY_PTR_NO_DISCARD proxy::proxy_ptr<T, A> reinterpret_pointer_cast(
+        const proxy::proxy_owner_ptr<U, A>& r) noexcept {
+        return proxy::reinterpret_pointer_cast<T>(
+            static_cast<const proxy::proxy_ptr<U, A>&>(r));
+    }
+
     template <class Type> class proxy_parent_base {
        public:
-        PROXY_PTR_NO_DISCARD proxy_ptr<Type> proxy() { return {_proxyPtr}; }
-        PROXY_PTR_NO_DISCARD proxy_ptr<Type> proxy_from_this() { return {_proxyPtr}; }
+        PROXY_PTR_NO_DISCARD proxy_ptr<Type> proxy() { return _proxyPtr; }
+        PROXY_PTR_NO_DISCARD proxy_ptr<Type> proxy_from_this() { return _proxyPtr; }
         template <class Derived> PROXY_PTR_NO_DISCARD proxy_ptr<Derived> proxy_from_base() {
             return {proxy::static_pointer_cast<Derived>(_proxyPtr)};
         }
@@ -487,7 +561,16 @@ namespace proxy {
     template <class T, class U, class A>
     PROXY_PTR_NO_DISCARD proxy::proxy_ptr<T, A> static_pointer_cast(
         const proxy::proxy_ptr<U, A>& r) noexcept {
-        auto p = static_cast<typename proxy::proxy_ptr<T, A>::Type*>(r.get());
+        using To = typename proxy::proxy_ptr<T, A>::Type;
+        using From = typename proxy::proxy_ptr<U, A>::Type;
+        // Expired sources keep their identity (hashkey) when the cast is a pure
+        // offset; a virtual-base cast would read the deleted object, so it
+        // only uses the live pointer.
+        To* p;
+        if constexpr (detail::is_offset_cast<To, From>)
+            p = static_cast<To*>(r.hashkey());
+        else
+            p = static_cast<To*>(r.get());
         return proxy::proxy_ptr<T, A>{p, r};
     }
 
@@ -503,173 +586,157 @@ namespace proxy {
     template <class T, class U, class A>
     PROXY_PTR_NO_DISCARD proxy::proxy_ptr<T, A> const_pointer_cast(
         const proxy::proxy_ptr<U, A>& r) noexcept {
-        auto p = const_cast<typename proxy::proxy_ptr<T, A>::Type*>(r.get());
+        auto p = const_cast<typename proxy::proxy_ptr<T, A>::Type*>(r.hashkey());
         return proxy::proxy_ptr<T, A>{p, r};
     }
 
     template <class T, class U, class A>
     PROXY_PTR_NO_DISCARD proxy::proxy_ptr<T, A> reinterpret_pointer_cast(
         const proxy::proxy_ptr<U, A>& r) noexcept {
-        auto p = reinterpret_cast<typename proxy::proxy_ptr<T, A>::Type*>(r.get());
+        auto p = reinterpret_cast<typename proxy::proxy_ptr<T, A>::Type*>(r.hashkey());
         return proxy::proxy_ptr<T, A>{p, r};
     }
 
+    // ── Comparisons ─────────────────────────────────────────────────────────
+    // In namespace proxy so ADL finds them for proxy_ptr and proxy_owner_ptr
+    // alike. Identity is hashkey(); `== nullptr` means "not alive".
+
+    template <class L, class R, detail::enable_if_handles<L, R> = 0>
+    PROXY_PTR_NO_DISCARD bool operator==(const L& _Left, const R& _Right) noexcept {
+        return _Left.hashkey() == _Right.hashkey();
+    }
+    template <class L, class R, detail::enable_if_handles<L, R> = 0>
+    PROXY_PTR_NO_DISCARD bool operator!=(const L& _Left, const R& _Right) noexcept {
+        return !(_Left == _Right);
+    }
+    template <class L, class R, detail::enable_if_handles<L, R> = 0>
+    PROXY_PTR_NO_DISCARD bool operator<(const L& _Left, const R& _Right) noexcept {
+        return _Left.hashkey() < _Right.hashkey();
+    }
+    template <class L, class R, detail::enable_if_handles<L, R> = 0>
+    PROXY_PTR_NO_DISCARD bool operator>=(const L& _Left, const R& _Right) noexcept {
+        return !(_Left < _Right);
+    }
+    template <class L, class R, detail::enable_if_handles<L, R> = 0>
+    PROXY_PTR_NO_DISCARD bool operator>(const L& _Left, const R& _Right) noexcept {
+        return _Right < _Left;
+    }
+    template <class L, class R, detail::enable_if_handles<L, R> = 0>
+    PROXY_PTR_NO_DISCARD bool operator<=(const L& _Left, const R& _Right) noexcept {
+        return !(_Right < _Left);
+    }
+
+    template <class H, detail::enable_if_handle<H> = 0>
+    PROXY_PTR_NO_DISCARD bool operator==(const H& _Left, std::nullptr_t) noexcept {
+        return !_Left;
+    }
+    template <class H, detail::enable_if_handle<H> = 0>
+    PROXY_PTR_NO_DISCARD bool operator==(std::nullptr_t, const H& _Right) noexcept {
+        return !_Right;
+    }
+    template <class H, detail::enable_if_handle<H> = 0>
+    PROXY_PTR_NO_DISCARD bool operator!=(const H& _Left, std::nullptr_t _Right) noexcept {
+        return !(_Left == _Right);
+    }
+    template <class H, detail::enable_if_handle<H> = 0>
+    PROXY_PTR_NO_DISCARD bool operator!=(std::nullptr_t _Left, const H& _Right) noexcept {
+        return !(_Left == _Right);
+    }
+    template <class H, detail::enable_if_handle<H> = 0>
+    PROXY_PTR_NO_DISCARD bool operator<(const H& _Left, std::nullptr_t _Right) noexcept {
+        return std::less<typename H::Type*>()(_Left.hashkey(), _Right);
+    }
+    template <class H, detail::enable_if_handle<H> = 0>
+    PROXY_PTR_NO_DISCARD bool operator<(std::nullptr_t _Left, const H& _Right) noexcept {
+        return std::less<typename H::Type*>()(_Left, _Right.hashkey());
+    }
+    template <class H, detail::enable_if_handle<H> = 0>
+    PROXY_PTR_NO_DISCARD bool operator>=(const H& _Left, std::nullptr_t _Right) noexcept {
+        return !(_Left < _Right);
+    }
+    template <class H, detail::enable_if_handle<H> = 0>
+    PROXY_PTR_NO_DISCARD bool operator>=(std::nullptr_t _Left, const H& _Right) noexcept {
+        return !(_Left < _Right);
+    }
+    template <class H, detail::enable_if_handle<H> = 0>
+    PROXY_PTR_NO_DISCARD bool operator>(const H& _Left, std::nullptr_t _Right) noexcept {
+        return _Right < _Left;
+    }
+    template <class H, detail::enable_if_handle<H> = 0>
+    PROXY_PTR_NO_DISCARD bool operator>(std::nullptr_t _Left, const H& _Right) noexcept {
+        return _Right < _Left;
+    }
+    template <class H, detail::enable_if_handle<H> = 0>
+    PROXY_PTR_NO_DISCARD bool operator<=(const H& _Left, std::nullptr_t _Right) noexcept {
+        return !(_Right < _Left);
+    }
+    template <class H, detail::enable_if_handle<H> = 0>
+    PROXY_PTR_NO_DISCARD bool operator<=(std::nullptr_t _Left, const H& _Right) noexcept {
+        return !(_Right < _Left);
+    }
+
+    template <class H, detail::enable_if_handle<H> = 0>
+    PROXY_PTR_NO_DISCARD bool operator==(
+        const H& _Left, const typename H::Type* _Right) noexcept {
+        return _Left.hashkey() == _Right;
+    }
+    template <class H, detail::enable_if_handle<H> = 0>
+    PROXY_PTR_NO_DISCARD bool operator==(
+        const typename H::Type* _Left, const H& _Right) noexcept {
+        return _Right.hashkey() == _Left;
+    }
+    template <class H, detail::enable_if_handle<H> = 0>
+    PROXY_PTR_NO_DISCARD bool operator!=(
+        const H& _Left, const typename H::Type* _Right) noexcept {
+        return !(_Left == _Right);
+    }
+    template <class H, detail::enable_if_handle<H> = 0>
+    PROXY_PTR_NO_DISCARD bool operator!=(
+        const typename H::Type* _Left, const H& _Right) noexcept {
+        return !(_Left == _Right);
+    }
+    template <class H, detail::enable_if_handle<H> = 0>
+    PROXY_PTR_NO_DISCARD bool operator<(
+        const H& _Left, const typename H::Type* _Right) noexcept {
+        return std::less<const typename H::Type*>()(_Left.hashkey(), _Right);
+    }
+    template <class H, detail::enable_if_handle<H> = 0>
+    PROXY_PTR_NO_DISCARD bool operator<(
+        const typename H::Type* _Left, const H& _Right) noexcept {
+        return std::less<const typename H::Type*>()(_Left, _Right.hashkey());
+    }
+    template <class H, detail::enable_if_handle<H> = 0>
+    PROXY_PTR_NO_DISCARD bool operator>=(
+        const H& _Left, const typename H::Type* _Right) noexcept {
+        return !(_Left < _Right);
+    }
+    template <class H, detail::enable_if_handle<H> = 0>
+    PROXY_PTR_NO_DISCARD bool operator>=(
+        const typename H::Type* _Left, const H& _Right) noexcept {
+        return !(_Left < _Right);
+    }
+    template <class H, detail::enable_if_handle<H> = 0>
+    PROXY_PTR_NO_DISCARD bool operator>(
+        const H& _Left, const typename H::Type* _Right) noexcept {
+        return _Right < _Left;
+    }
+    template <class H, detail::enable_if_handle<H> = 0>
+    PROXY_PTR_NO_DISCARD bool operator>(
+        const typename H::Type* _Left, const H& _Right) noexcept {
+        return _Right < _Left;
+    }
+    template <class H, detail::enable_if_handle<H> = 0>
+    PROXY_PTR_NO_DISCARD bool operator<=(
+        const H& _Left, const typename H::Type* _Right) noexcept {
+        return !(_Right < _Left);
+    }
+    template <class H, detail::enable_if_handle<H> = 0>
+    PROXY_PTR_NO_DISCARD bool operator<=(
+        const typename H::Type* _Left, const H& _Right) noexcept {
+        return !(_Right < _Left);
+    }
+
 }  // namespace proxy
-
-template <class Type, class AtomicType>
-PROXY_PTR_NO_DISCARD bool operator==(
-    const proxy::proxy_ptr<Type, AtomicType>& _Left, std::nullptr_t) noexcept {
-    return !_Left;
-}
-
-template <class Type, class AtomicType>
-PROXY_PTR_NO_DISCARD bool operator==(
-    std::nullptr_t, const proxy::proxy_ptr<Type, AtomicType>& _Right) noexcept {
-    return !_Right;
-}
-
-template <class Type, class AtomicType>
-PROXY_PTR_NO_DISCARD bool operator!=(
-    const proxy::proxy_ptr<Type, AtomicType>& _Left,
-    std::nullptr_t _Right) noexcept {
-    return !(_Left == _Right);
-}
-
-template <class Type, class AtomicType>
-PROXY_PTR_NO_DISCARD bool operator!=(
-    std::nullptr_t _Left,
-    const proxy::proxy_ptr<Type, AtomicType>& _Right) noexcept {
-    return !(_Left == _Right);
-}
-
-template <class Type, class AtomicType>
-PROXY_PTR_NO_DISCARD bool operator<(
-    const proxy::proxy_ptr<Type, AtomicType>& _Left,
-    std::nullptr_t _Right) noexcept {
-    return std::less<Type*>()(_Left.hashkey(), _Right);
-}
-
-template <class Type, class AtomicType>
-PROXY_PTR_NO_DISCARD bool operator<(
-    std::nullptr_t _Left,
-    const proxy::proxy_ptr<Type, AtomicType>& _Right) noexcept {
-    return std::less<Type*>()(_Left, _Right.hashkey());
-}
-
-template <class Type, class AtomicType>
-PROXY_PTR_NO_DISCARD bool operator>=(
-    const proxy::proxy_ptr<Type, AtomicType>& _Left,
-    std::nullptr_t _Right) noexcept {
-    return !(_Left < _Right);
-}
-
-template <class Type, class AtomicType>
-PROXY_PTR_NO_DISCARD bool operator>=(
-    std::nullptr_t _Left, const proxy::proxy_ptr<Type, AtomicType>& _Right) {
-    return !(_Left < _Right);
-}
-
-template <class Type, class AtomicType>
-PROXY_PTR_NO_DISCARD bool operator>(
-    const proxy::proxy_ptr<Type, AtomicType>& _Left, std::nullptr_t _Right) {
-    return _Right < _Left;
-}
-
-template <class Type, class AtomicType>
-PROXY_PTR_NO_DISCARD bool operator>(
-    std::nullptr_t _Left, const proxy::proxy_ptr<Type, AtomicType>& _Right) {
-    return _Right < _Left;
-}
-
-template <class Type, class AtomicType>
-PROXY_PTR_NO_DISCARD bool operator<=(
-    const proxy::proxy_ptr<Type, AtomicType>& _Left, std::nullptr_t _Right) {
-    return !(_Right < _Left);
-}
-
-template <class Type, class AtomicType>
-PROXY_PTR_NO_DISCARD bool operator<=(
-    std::nullptr_t _Left, const proxy::proxy_ptr<Type, AtomicType>& _Right) {
-    return !(_Right < _Left);
-}
-
-//
-
-template <class Type, class AtomicType>
-PROXY_PTR_NO_DISCARD bool operator==(
-    const proxy::proxy_ptr<Type, AtomicType>& _Left,
-    const Type* const _ptr) noexcept {
-    return _Left.hashkey() == _ptr;
-}
-
-template <class Type, class AtomicType>
-PROXY_PTR_NO_DISCARD bool operator==(
-    const Type* _ptr,
-    const proxy::proxy_ptr<Type, AtomicType>& _Right) noexcept {
-    return _Right.hashkey() == _ptr;
-}
-
-template <class Type, class AtomicType>
-PROXY_PTR_NO_DISCARD bool operator!=(
-    const proxy::proxy_ptr<Type, AtomicType>& _Left,
-    const Type* const _Right) noexcept {
-    return !(_Left == _Right);
-}
-
-template <class Type, class AtomicType>
-PROXY_PTR_NO_DISCARD bool operator!=(
-    const Type* _Left,
-    const proxy::proxy_ptr<Type, AtomicType>& _Right) noexcept {
-    return !(_Left == _Right);
-}
-
-template <class Type, class AtomicType>
-PROXY_PTR_NO_DISCARD bool operator<(
-    const proxy::proxy_ptr<Type, AtomicType>& _Left, const Type* const _Right) {
-    return std::less<const Type*>()(_Left.hashkey(), _Right);
-}
-
-template <class Type, class AtomicType>
-PROXY_PTR_NO_DISCARD bool operator<(
-    const Type* const _Left, const proxy::proxy_ptr<Type, AtomicType>& _Right) {
-    return std::less<const Type*>()(_Left, _Right.hashkey());
-}
-
-template <class Type, class AtomicType>
-PROXY_PTR_NO_DISCARD bool operator>=(
-    const proxy::proxy_ptr<Type, AtomicType>& _Left, const Type* const _Right) {
-    return !(_Left < _Right);
-}
-
-template <class Type, class AtomicType>
-PROXY_PTR_NO_DISCARD bool operator>=(
-    const Type* const _Left, const proxy::proxy_ptr<Type, AtomicType>& _Right) {
-    return !(_Left < _Right);
-}
-
-template <class Type, class AtomicType>
-PROXY_PTR_NO_DISCARD bool operator>(
-    const proxy::proxy_ptr<Type, AtomicType>& _Left, const Type* const _Right) {
-    return _Right < _Left;
-}
-
-template <class Type, class AtomicType>
-PROXY_PTR_NO_DISCARD bool operator>(
-    const Type* const _Left, const proxy::proxy_ptr<Type, AtomicType>& _Right) {
-    return _Right < _Left;
-}
-
-template <class Type, class AtomicType>
-PROXY_PTR_NO_DISCARD bool operator<=(
-    const proxy::proxy_ptr<Type, AtomicType>& _Left, const Type* const _Right) {
-    return !(_Right < _Left);
-}
-
-template <class Type, class AtomicType>
-PROXY_PTR_NO_DISCARD bool operator<=(
-    const Type* const _Left, const proxy::proxy_ptr<Type, AtomicType>& _Right) {
-    return !(_Right < _Left);
-}
 
 template <class Type, class AtomicType>
 struct std::hash<proxy::proxy_ptr<Type, AtomicType>> {
