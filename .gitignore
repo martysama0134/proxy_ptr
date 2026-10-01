@@ -31,9 +31,14 @@
 *.out
 *.app
 
+# Compile folders
 x64/
 Release/
 Debug/
 x86/
 .vs/
 build/
+
+# Agents
+/docs/
+CLAUDE.local.md
